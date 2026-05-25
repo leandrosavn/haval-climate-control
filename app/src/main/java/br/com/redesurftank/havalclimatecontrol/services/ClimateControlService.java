@@ -136,6 +136,7 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
 
     private boolean  isHvacSuspended    = false;
     private Runnable resumeHvacRunnable = null;
+    private final Runnable acOffCheckRunnable = this::evaluateClimateControl;
 
     private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
 
@@ -392,6 +393,7 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
                     sendHvacCommand(PROP_AC_ENABLE, "1");
                     dataCache.put(PROP_AC_ENABLE, "1");
                     acOffTimestamp = 0;
+                    backgroundHandler.removeCallbacks(acOffCheckRunnable);
                     logEntry = timeFormat.format(new Date()) + "  AC ligado — partida do carro (30s protegido)";
                 }
             }
@@ -429,6 +431,8 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
                         sendHvacCommand(PROP_AC_ENABLE, "0");
                         dataCache.put(PROP_AC_ENABLE, "0");
                         acOffTimestamp = System.currentTimeMillis();
+                        backgroundHandler.removeCallbacks(acOffCheckRunnable);
+                        backgroundHandler.postDelayed(acOffCheckRunnable, 62_000L);
                         logEntry = timeFormat.format(new Date()) + "  " + msg;
                     } else if (!isAcOn && (insideTemp >= setTemp + 0.5f
                             || (insideTemp >= setTemp && acOffOver1Min))) {
@@ -440,17 +444,28 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
                         sendHvacCommand(PROP_AC_ENABLE, "1");
                         dataCache.put(PROP_AC_ENABLE, "1");
                         acOffTimestamp = 0;
+                        backgroundHandler.removeCallbacks(acOffCheckRunnable);
                         logEntry = timeFormat.format(new Date()) + "  " + msg;
                     }
 
                     String currentCurve = dataCache.get(PROP_COMFORT_CURVE);
+                    String cMode = ClimateStateHolder.INSTANCE.getComfortMode();
                     String desiredCurve;
-                    if (insideTemp < 22f) {
-                        desiredCurve = "0";
-                    } else if (insideTemp <= 24f) {
-                        desiredCurve = "1";
-                    } else {
-                        desiredCurve = "2";
+                    switch (cMode) {
+                        case "SUAVE":  desiredCurve = "0"; break;
+                        case "NORMAL": desiredCurve = "1"; break;
+                        case "FORTE":  desiredCurve = "2"; break;
+                        default: {
+                            float oTemp = 0f;
+                            String oStr = dataCache.get(PROP_OUTSIDE_TEMP);
+                            if (oStr != null) {
+                                try { oTemp = Float.parseFloat(oStr); } catch (NumberFormatException ignored) {}
+                            }
+                            if (oTemp >= 24f)      desiredCurve = "2";
+                            else if (oTemp >= 19f) desiredCurve = "1";
+                            else                   desiredCurve = "0";
+                            break;
+                        }
                     }
                     if (!desiredCurve.equals(currentCurve)) {
                         String msg = String.format(Locale.getDefault(),

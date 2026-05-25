@@ -65,6 +65,7 @@ private const val UI_PREFS                 = "climate_ui_prefs"
 private const val KEY_AUTO_CONTROL         = "auto_control_enabled"
 private const val KEY_LAST_UPDATE_CHECK    = "last_update_check_ms"
 private const val KEY_SEAT_VENT_AUTO       = "seat_vent_auto_enabled"
+private const val KEY_COMFORT_MODE         = "comfort_mode"
 private const val UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L
 
 // ─────────────────────────────────────────────────────────────
@@ -147,6 +148,9 @@ fun MainControlScreen(
     var seatVentAutoEnabled by remember {
         mutableStateOf(prefs.getBoolean(KEY_SEAT_VENT_AUTO, true))
     }
+    var comfortMode by remember {
+        mutableStateOf(prefs.getString(KEY_COMFORT_MODE, "AUTO") ?: "AUTO")
+    }
     var devMenuVisible by remember { mutableStateOf(false) }
 
     val permLauncher = rememberLauncherForActivityResult(
@@ -156,6 +160,7 @@ fun MainControlScreen(
     LaunchedEffect(Unit) {
         state.autoControlEnabled    = autoControlEnabled
         state.seatVentAutoEnabled   = seatVentAutoEnabled
+        state.comfortMode           = comfortMode
         try {
             currentVersion = context.packageManager
                 .getPackageInfo(context.packageName, 0).versionName ?: "--"
@@ -311,8 +316,16 @@ fun MainControlScreen(
         }
 
         // Bottom info strip
+        val comfortModeList = listOf("AUTO", "SUAVE", "NORMAL", "FORTE")
         HmiInfoStripRow(
             state               = state,
+            comfortMode         = comfortMode,
+            onCycleComfort      = {
+                val next = comfortModeList[(comfortModeList.indexOf(comfortMode) + 1) % comfortModeList.size]
+                comfortMode       = next
+                state.comfortMode = next
+                prefs.edit().putString(KEY_COMFORT_MODE, next).apply()
+            },
             seatVentAutoEnabled = seatVentAutoEnabled,
             onToggleSeatVent    = {
                 val next = !seatVentAutoEnabled
@@ -998,6 +1011,8 @@ private fun TempReadCard(
 @Composable
 private fun HmiInfoStripRow(
     state: ClimateStateHolder,
+    comfortMode: String,
+    onCycleComfort: () -> Unit,
     seatVentAutoEnabled: Boolean,
     onToggleSeatVent: () -> Unit
 ) {
@@ -1059,15 +1074,20 @@ private fun HmiInfoStripRow(
         }
 
         // 2. Modo Conforto
-        HmiInfoCardBox(modifier = Modifier.weight(1f)) {
+        val resolvedCurve = if (comfortMode == "AUTO") {
+            val oTemp = state.outsideTemp.toFloatOrNull() ?: 0f
+            when { oTemp >= 24f -> "2"; oTemp >= 19f -> "1"; else -> "0" }
+        } else null
+        val curveLabel = mapOf("0" to "SUAVE", "1" to "NORMAL", "2" to "FORTE")
+        HmiInfoCardBox(modifier = Modifier.weight(1f).clickable(onClick = onCycleComfort)) {
             Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
                 Text("MODO CONFORTO", fontSize = 10.sp, color = HmiFgDim, letterSpacing = 2.sp, fontWeight = FontWeight.SemiBold)
                 Row(
                     modifier              = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    listOf("0" to "SUAVE", "1" to "NORMAL", "2" to "FORTE").forEach { (v, lbl) ->
-                        val isActive = state.comfortCurve == v
+                    listOf("AUTO", "SUAVE", "NORMAL", "FORTE").forEach { mode ->
+                        val isActive = mode == comfortMode
                         Box(
                             modifier = Modifier
                                 .weight(1f)
@@ -1084,7 +1104,7 @@ private fun HmiInfoStripRow(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                lbl,
+                                mode,
                                 fontSize      = 9.5.sp,
                                 fontWeight    = FontWeight.SemiBold,
                                 fontFamily    = FontFamily.Monospace,
@@ -1093,6 +1113,14 @@ private fun HmiInfoStripRow(
                             )
                         }
                     }
+                }
+                if (resolvedCurve != null) {
+                    Text(
+                        "→ ${curveLabel[resolvedCurve]} · ${state.outsideTemp}°C ext.",
+                        fontSize      = 9.sp,
+                        color         = HmiFgDim,
+                        fontFamily    = FontFamily.Monospace
+                    )
                 }
             }
         }

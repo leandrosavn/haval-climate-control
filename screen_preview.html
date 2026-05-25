@@ -1,16 +1,20 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8"/>
+<meta charset="utf-8" />
 <title>Haval Climate Control — Preview</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-/* ── tokens ─────────────────────────────────────────────── */
+/* ── design tokens ── */
 :root {
-  --bg:          #000;
+  --bg:          #000000;
   --surface:     #141414;
-  --surface2:    #1c1c1c;
+  --surface-2:   #1c1c1c;
   --border:      rgba(255,255,255,0.07);
-  --border-str:  rgba(255,255,255,0.12);
+  --border-strong: rgba(255,255,255,0.12);
   --fg:          #fafafa;
   --fg-muted:    #a3a3a3;
   --fg-dim:      #6b6b6b;
@@ -18,575 +22,1246 @@
   --accent:      #22c55e;
   --accent-soft: rgba(34,197,94,0.12);
   --accent-edge: rgba(34,197,94,0.40);
-  --mono: "JetBrains Mono","Courier New",monospace;
+  --warn:        #f5b14b;
+  --radius-sm:   10px;
+  --radius:      16px;
+  --radius-lg:   22px;
+  --font:        "Geist","Inter",system-ui,-apple-system,sans-serif;
+  --mono:        "Geist Mono","JetBrains Mono",ui-monospace,monospace;
 }
 
-/* ── reset / stage ───────────────────────────────────────── */
-*{box-sizing:border-box;margin:0;padding:0}
-html,body{background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:"Segoe UI",system-ui,sans-serif;color:var(--fg)}
+/* ── reset / stage ── */
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: #000; color: var(--fg);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden; min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+}
+.stage-wrap {
+  width: 100vw; height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  background: #000; overflow: hidden;
+}
+.stage {
+  width: 1792px; height: 660px;
+  background: var(--bg);
+  transform-origin: center center;
+  overflow: hidden;
+  outline: 1px solid rgba(255,255,255,0.04);
+}
+.stage > #root { width: 100%; height: 100%; display: flex; flex-direction: column; }
+.stage > #root > * { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
-.stage-wrap{width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden}
-.stage{
-  width:1792px;height:660px;
-  background:var(--bg);
-  transform-origin:center center;
-  overflow:hidden;
-  display:flex;flex-direction:column;
-  padding:24px 32px 20px;
-  gap:20px;
-  outline:1px solid rgba(255,255,255,0.04);
-}
+/* ── theme variants ── */
+.stage[data-theme="pure-black"]  { --bg: #000000; --surface: #0e0e0e; --surface-2: #161616; }
+.stage[data-theme="dark-gray"]   { --bg: #0a0a0a; --surface: #161616; --surface-2: #1e1e1e; }
+.stage[data-theme="near-black"]  { --bg: #141414; --surface: #1c1c1c; --surface-2: #242424; }
 
-/* ── header ──────────────────────────────────────────────── */
-.app-header{display:flex;align-items:center;justify-content:space-between;height:36px;flex-shrink:0}
-
-.brand{display:flex;align-items:center;gap:12px}
-.brand-mark{
-  width:24px;height:24px;border-radius:6px;
-  background:var(--surface);border:1px solid var(--border-str);
-  display:grid;place-items:center;
-  font-size:11px;font-weight:700;letter-spacing:0
-}
-.brand-label{font-size:12px;font-weight:600;color:var(--fg-muted);letter-spacing:2px;text-transform:uppercase}
-
-.nav-tabs{display:flex;gap:4px}
-.nav-tab{
-  display:flex;align-items:center;gap:6px;
-  padding:8px 16px;border-radius:999px;
-  font-size:13px;font-weight:500;color:var(--fg-dim);
-  cursor:pointer;user-select:none;
-}
-.nav-tab.active{
-  color:var(--fg);background:var(--surface2);
-  border:1px solid var(--border-str);
-  padding:7px 15px;
-}
-.nav-tab .num{font-family:var(--mono);font-size:11px;color:var(--fg-faint)}
-.nav-tab.active .num{color:var(--fg-muted)}
-
-.status-cluster{display:flex;align-items:center;gap:16px}
-.status-pill{
-  display:flex;align-items:center;gap:8px;
-  padding:6px 12px 6px 10px;
-  border:1px solid var(--border);border-radius:999px;
-  background:var(--surface);
-  font-size:11px;font-weight:500;letter-spacing:1.5px;text-transform:uppercase;color:var(--fg-muted);
-}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
-.dot.off{background:var(--fg-dim)}
-.version{font-family:var(--mono);font-size:11px;color:var(--fg-dim);letter-spacing:.5px}
-
-/* ── hero 3-col ──────────────────────────────────────────── */
-.hero{display:grid;grid-template-columns:380px 1fr 380px;gap:18px;flex:1;min-height:0}
-
-/* LEFT — auto card */
-.auto-card{
-  display:flex;flex-direction:column;justify-content:space-between;
-  padding:26px;border-radius:22px;
-  background:linear-gradient(180deg,var(--surface) 0%,#0a0a0a 100%);
-  border:1px solid var(--border-str);
-  cursor:pointer;transition:all .2s;
-}
-.auto-card.on{
-  background:linear-gradient(180deg,rgba(34,197,94,.10) 0%,rgba(34,197,94,.02) 100%);
-  border-color:var(--accent-edge);
-  box-shadow:0 0 32px rgba(34,197,94,.06);
-}
-.ac-head{display:flex;align-items:center;justify-content:space-between}
-.ac-eyebrow{font-size:10px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:var(--fg-dim)}
-.ac-led{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:2px;color:var(--fg-dim)}
-.ac-led .ld{width:9px;height:9px;border-radius:50%;background:var(--fg-faint)}
-.auto-card.on .ac-led{color:var(--accent)}
-.auto-card.on .ac-led .ld{background:var(--accent);box-shadow:0 0 8px var(--accent)}
-
-.ac-body{display:flex;flex-direction:column;gap:6px;margin-top:10px}
-.ac-icon-row{display:flex;align-items:center;gap:16px}
-.ac-icon{
-  width:56px;height:56px;border-radius:14px;
-  background:var(--surface2);border:1px solid var(--border);
-  display:grid;place-items:center;color:var(--fg-muted);flex-shrink:0;
-}
-.auto-card.on .ac-icon{color:var(--accent);background:var(--accent-soft);border-color:var(--accent-edge)}
-.ac-title{font-size:28px;font-weight:600;letter-spacing:-.3px;line-height:1.05}
-.ac-state{font-size:13px;color:var(--fg-muted);line-height:1.4;margin-top:4px}
-.auto-card.on .ac-state{color:var(--accent)}
-
-.ac-toggle{
-  margin-top:20px;display:flex;align-items:center;justify-content:space-between;
-  padding:14px 18px;border-radius:14px;
-  background:var(--surface2);border:1px solid var(--border-str);
-  font-size:13px;font-weight:500;color:var(--fg-muted);letter-spacing:.5px;
-}
-.auto-card.on .ac-toggle{background:var(--accent-soft);border-color:var(--accent-edge);color:var(--fg)}
-.switch{
-  width:54px;height:30px;border-radius:999px;
-  background:var(--surface);border:1px solid var(--border-str);
-  position:relative;transition:all .2s;flex-shrink:0;
-}
-.switch::after{
-  content:"";position:absolute;top:3px;left:3px;
-  width:22px;height:22px;border-radius:50%;background:var(--fg-muted);
-  transition:all .2s cubic-bezier(.4,0,.2,1);
-}
-.auto-card.on .switch{background:var(--accent);border-color:var(--accent)}
-.auto-card.on .switch::after{left:27px;background:#fff}
-
-.ac-foot{
-  margin-top:14px;padding-top:14px;border-top:1px solid var(--border);
-  display:flex;justify-content:space-between;
-  font:500 10px var(--mono);color:var(--fg-faint);letter-spacing:.5px;
+/* ── app shell ── */
+.app {
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  padding: 24px 32px; gap: 20px;
 }
 
-/* CENTER — car viz */
-.hero-center{
-  background:var(--surface);border:1px solid var(--border);border-radius:22px;
-  padding:18px;display:flex;flex-direction:column;gap:10px;min-height:0;overflow:hidden;
+/* ── header ── */
+.app-header {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  height: 36px; flex-shrink: 0;
 }
-.center-top{display:flex;align-items:center;justify-content:space-between}
-.center-eyebrow{font-size:10px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:var(--fg-dim)}
-.setpoint{display:flex;align-items:baseline;gap:2px}
-.setpoint .v{font-family:var(--mono);font-size:36px;font-weight:500;letter-spacing:-1px;color:var(--fg)}
-.setpoint .u{font-size:16px;color:var(--fg-muted)}
-.car-viz{flex:1;position:relative;min-height:0}
-.car-viz svg{width:100%;height:100%}
-.center-bottom{display:flex;justify-content:center}
-.hero-pill{
-  display:flex;align-items:center;gap:10px;
-  padding:8px 16px;border-radius:999px;
-  background:var(--surface2);border:1px solid var(--border-str);
-  font:500 11px var(--mono);letter-spacing:1.5px;text-transform:uppercase;color:var(--fg-muted);
+.brand {
+  display: flex; align-items: center; gap: 12px;
+  letter-spacing: 0.16em; font-size: 17px; font-weight: 600;
+  color: var(--fg-muted); text-transform: uppercase;
 }
-.hero-pill .ldot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent)}
+.brand-mark {
+  width: 24px; height: 24px; border-radius: 6px;
+  background: var(--surface); border: 1px solid var(--border-strong);
+  display: grid; place-items: center;
+  color: var(--fg); font-weight: 700; font-size: 15px; letter-spacing: 0;
+}
+.brand .sep { color: var(--fg-faint); }
 
-/* airflow animation */
-@keyframes flowL{0%{stroke-dashoffset:56}100%{stroke-dashoffset:0}}
-@keyframes flowR{0%{stroke-dashoffset:-56}100%{stroke-dashoffset:0}}
-.flow-l path{stroke-dasharray:12 16;animation:flowL 2s linear infinite}
-.flow-r path{stroke-dasharray:12 16;animation:flowR 2s linear infinite}
-.flow-l path:nth-child(2),.flow-r path:nth-child(2){animation-delay:.5s}
-.flow-l path:nth-child(3),.flow-r path:nth-child(3){animation-delay:1s}
-.flow-l path:nth-child(4),.flow-r path:nth-child(4){animation-delay:1.5s}
-
-/* RIGHT — temp column */
-.temp-col{display:grid;grid-template-rows:1fr 1fr;gap:14px;min-height:0}
-.temp-card{
-  background:var(--surface);border:1px solid var(--border);border-radius:22px;
-  padding:22px 26px;display:flex;flex-direction:column;justify-content:space-between;
+.nav-tabs { display: flex; gap: 4px; }
+.nav-tab {
+  appearance: none; background: none; border: 0; font: inherit;
+  color: var(--fg-dim); padding: 8px 16px; border-radius: 999px;
+  font-size: 17px; font-weight: 500; letter-spacing: 0.02em;
+  cursor: pointer; transition: all 0.15s ease;
+  display: flex; align-items: center; gap: 6px;
 }
-.temp-head{display:flex;align-items:center;justify-content:space-between}
-.temp-lbl{font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--fg-dim)}
-.temp-icon{color:var(--fg-faint)}
-.temp-val{font-family:var(--mono);font-size:64px;font-weight:500;letter-spacing:-2px;line-height:1;color:var(--fg)}
-.temp-val .u{font-size:24px;color:var(--fg-muted);font-weight:400;margin-left:4px}
-.temp-foot{display:flex;align-items:center;justify-content:space-between;font:500 11px var(--mono);color:var(--fg-dim)}
-.temp-foot .delta{
-  padding:3px 8px;border:1px solid var(--border-str);border-radius:999px;color:var(--fg-muted);
+.nav-tab:hover { color: var(--fg); background: var(--surface); }
+.nav-tab.active {
+  color: var(--fg); background: var(--surface-2);
+  border: 1px solid var(--border-strong); padding: 7px 15px;
 }
+.nav-tab .tab-num { color: var(--fg-faint); font-variant-numeric: tabular-nums; font-size: 14px; }
+.nav-tab.active .tab-num { color: var(--fg-muted); }
 
-/* ── bottom strip ─────────────────────────────────────────── */
-.info-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;flex-shrink:0;height:90px}
-.ro-card{
-  background:var(--surface);border:1px solid var(--border);border-radius:16px;
-  padding:14px 18px;display:grid;grid-template-columns:44px 1fr;align-items:center;gap:14px;
+.status-cluster { display: flex; align-items: center; gap: 16px; }
+.status-pill {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px 6px 10px;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface);
+  font-size: 16px; font-weight: 500;
+  letter-spacing: 0.04em; text-transform: uppercase; color: var(--fg-muted);
 }
-.ro-icon{
-  width:44px;height:44px;border-radius:12px;
-  background:var(--surface2);border:1px solid var(--border);
-  display:grid;place-items:center;color:var(--fg-muted);flex-shrink:0;
+.dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
 }
-.ro-icon.on{color:var(--accent);background:var(--accent-soft);border-color:var(--accent-edge)}
-.ro-body{display:flex;flex-direction:column;gap:4px;min-width:0}
-.ro-lbl{font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--fg-dim)}
-.ro-val{font-size:22px;font-weight:500;letter-spacing:-.3px;color:var(--fg);display:flex;align-items:center;gap:8px}
-.val-led{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0}
-.val-led.off{background:var(--fg-faint)}
+.dot.idle { background: var(--fg-dim); box-shadow: none; }
 
-/* segmented comfort */
-.seg-row{display:flex;gap:4px;margin-top:6px}
-.seg{
-  flex:1;padding:6px 0;text-align:center;border-radius:6px;
-  font:600 9.5px var(--mono);letter-spacing:1px;text-transform:uppercase;
-  color:var(--fg-faint);background:var(--surface2);border:1px solid var(--border);
+/* ── main grid ── */
+.main-grid {
+  flex: 1; display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 16px; min-height: 0;
 }
-.seg.on{color:var(--accent);background:var(--accent-soft);border-color:var(--accent-edge)}
-
-/* vent bars */
-.vent-val{font-size:20px;font-weight:500;letter-spacing:-.3px;color:var(--fg)}
-.bar-row{display:flex;gap:3px;height:5px;margin-top:4px}
-.bar{flex:1;border-radius:1px;background:var(--surface2);border:.5px solid var(--border)}
-.bar.on{background:var(--fg);border-color:var(--fg-muted)}
-
-/* comfort card overrides */
-.ro-card-col{
-  background:var(--surface);border:1px solid var(--border);border-radius:16px;
-  padding:14px 18px;display:flex;flex-direction:column;justify-content:space-between;
+.hero-3col {
+  display: grid;
+  grid-template-columns: 380px 1fr 380px;
+  gap: 18px; min-height: 0;
 }
 
-/* ── tweaks panel ────────────────────────────────────────── */
-.tweaks{
-  position:fixed;bottom:16px;right:16px;
-  background:#111;border:1px solid #2a2a2a;border-radius:12px;
-  padding:12px 16px;display:flex;flex-direction:column;gap:8px;
-  font-size:12px;color:#888;z-index:10;min-width:220px;
+/* ── AUTO master card (left) ── */
+.auto-card {
+  display: flex; flex-direction: column;
+  justify-content: space-between;
+  padding: 24px 26px; border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, var(--surface) 0%, #0a0a0a 100%);
+  border: 1px solid var(--border-strong);
+  cursor: pointer; transition: all 0.2s ease;
+  position: relative; overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 0 rgba(0,0,0,0.6);
 }
-.tweaks label{display:flex;align-items:center;gap:8px;cursor:pointer;color:#aaa}
-.tweaks input[type=checkbox]{accent-color:var(--accent)}
-.tweaks-title{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#555;margin-bottom:2px;font-family:var(--mono)}
-.tweaks select{
-  background:#1a1a1a;color:#aaa;border:1px solid #333;border-radius:4px;
-  padding:2px 6px;font-size:12px;flex:1;
+.auto-card.on {
+  background: linear-gradient(180deg, rgba(34,197,94,0.10) 0%, rgba(34,197,94,0.02) 100%);
+  border-color: var(--accent-edge);
+  box-shadow: inset 0 1px 0 rgba(34,197,94,0.18), 0 1px 0 rgba(0,0,0,0.6), 0 0 32px rgba(34,197,94,0.06);
 }
-.tweaks label span{flex:0 0 auto}
+.auto-card-head { display: flex; align-items: center; justify-content: space-between; }
+.auto-card-eyebrow {
+  font-size: 15px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--fg-dim); font-weight: 600;
+}
+.auto-card-led {
+  display: flex; align-items: center; gap: 8px;
+  font: 600 15px var(--mono); letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--fg-dim);
+}
+.auto-card-led .ld {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--fg-faint);
+  box-shadow: inset 0 1px 1px rgba(0,0,0,0.6);
+}
+.auto-card.on .auto-card-led { color: var(--accent); }
+.auto-card.on .auto-card-led .ld {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent), 0 0 14px rgba(34,197,94,0.4);
+}
+.auto-card-body { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.auto-card-icon-row { display: flex; align-items: center; gap: 16px; }
+.auto-card-icon {
+  width: 56px; height: 56px; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  display: grid; place-items: center; color: var(--fg-muted); flex: 0 0 auto;
+}
+.auto-card.on .auto-card-icon {
+  color: var(--accent);
+  background: rgba(34,197,94,0.08); border-color: var(--accent-edge);
+}
+.auto-card-title {
+  font-size: 28px; font-weight: 600;
+  letter-spacing: -0.01em; color: var(--fg); line-height: 1.05;
+}
+.auto-card-state { font-size: 17px; color: var(--fg-muted); margin-top: 4px; }
+.auto-card.on .auto-card-state { color: var(--accent); }
+.auto-toggle {
+  margin-top: 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--border-strong);
+  font-size: 17px; color: var(--fg-muted); letter-spacing: 0.04em;
+}
+.auto-card.on .auto-toggle {
+  background: rgba(34,197,94,0.08);
+  border-color: var(--accent-edge); color: var(--fg);
+}
+.toggle-switch-mini {
+  width: 54px; height: 30px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--border-strong);
+  position: relative; flex-shrink: 0; transition: all 0.2s ease;
+}
+.toggle-switch-mini::after {
+  content: ""; position: absolute;
+  top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--fg-muted);
+  transition: all 0.2s cubic-bezier(.4,0,.2,1);
+}
+.auto-card.on .toggle-switch-mini { background: var(--accent); border-color: var(--accent); }
+.auto-card.on .toggle-switch-mini::after { left: 27px; background: #fff; }
+
+/* ── center hero ── */
+.hero-center {
+  position: relative;
+  background: radial-gradient(ellipse at center top, rgba(255,255,255,0.025), transparent 60%), var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: 14px 18px 8px;
+  display: grid; grid-template-rows: auto 1fr auto;
+  gap: 6px; min-height: 0; overflow: hidden;
+}
+.hero-center-top {
+  display: flex; align-items: center; justify-content: space-between; padding: 0 6px;
+}
+.hero-center-eyebrow {
+  font-size: 15px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--fg-dim); font-weight: 600;
+}
+.hero-setpoint { display: flex; align-items: baseline; gap: 4px; font-variant-numeric: tabular-nums; }
+.hero-setpoint .lab {
+  font-size: 15px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--fg-dim); margin-right: 8px; font-weight: 600;
+}
+.hero-setpoint .v {
+  font-size: 36px; font-weight: 500;
+  letter-spacing: -0.03em; color: var(--fg); line-height: 1;
+}
+.hero-setpoint .u { font-size: 19px; color: var(--fg-muted); }
+.car-viz { position: relative; display: grid; place-items: center; min-height: 0; }
+.car-viz svg { width: 100%; height: 100%; max-height: 320px; }
+.hero-center-bottom {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  padding: 0 6px 4px;
+}
+.hero-pill {
+  display: flex; align-items: center; gap: 10px; padding: 8px 16px;
+  background: var(--surface-2); border: 1px solid var(--border-strong);
+  border-radius: 999px; font: 500 16px var(--mono);
+  color: var(--fg-muted); letter-spacing: 0.06em; text-transform: uppercase;
+}
+.hero-pill .ldot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 6px var(--accent);
+}
+.hero-pill.idle .ldot { background: var(--fg-faint); box-shadow: none; }
+
+/* airflow */
+@keyframes flowL {
+  0%   { stroke-dashoffset: 0;   opacity: 0; }
+  30%  { opacity: 0.55; }
+  100% { stroke-dashoffset: -60; opacity: 0; }
+}
+@keyframes flowR {
+  0%   { stroke-dashoffset: 0;  opacity: 0; }
+  30%  { opacity: 0.55; }
+  100% { stroke-dashoffset: 60; opacity: 0; }
+}
+.flow-l path { animation: flowL 2.6s linear infinite; }
+.flow-r path { animation: flowR 2.6s linear infinite; }
+.flow path:nth-child(2) { animation-delay: 0.6s; }
+.flow path:nth-child(3) { animation-delay: 1.2s; }
+.flow path:nth-child(4) { animation-delay: 1.8s; }
+
+/* ── right temp cards ── */
+.hero-right { display: grid; grid-template-rows: 1fr 1fr; gap: 14px; min-height: 0; }
+.temp-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 22px 26px;
+  display: flex; flex-direction: column;
+  justify-content: space-between; gap: 8px;
+}
+.temp-card-head { display: flex; justify-content: space-between; align-items: center; }
+.temp-card-label {
+  font-size: 16px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--fg-dim); font-weight: 600;
+}
+.temp-card-icon { color: var(--fg-faint); display: grid; place-items: center; }
+.temp-card-value {
+  font-size: 64px; font-weight: 500;
+  letter-spacing: -0.04em; line-height: 1; color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+.temp-card-value .unit { font-size: 24px; color: var(--fg-muted); margin-left: 4px; font-weight: 400; }
+.temp-card-foot {
+  display: flex; justify-content: space-between; align-items: center;
+  font: 500 16px var(--mono); color: var(--fg-dim); letter-spacing: 0.04em;
+}
+.temp-card-foot .delta {
+  padding: 3px 8px; border: 1px solid var(--border-strong); border-radius: 999px;
+  color: var(--fg-muted); font-variant-numeric: tabular-nums;
+}
+
+/* ── bottom info strip ── */
+.info-strip {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 14px; flex: 0 0 auto;
+}
+.ro-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 18px;
+  display: grid; grid-template-columns: 44px 1fr;
+  align-items: center; gap: 14px; min-height: 86px;
+}
+.ro-card-icon {
+  width: 44px; height: 44px; border-radius: 12px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  display: grid; place-items: center; color: var(--fg-muted);
+}
+.ro-card.on .ro-card-icon {
+  color: var(--accent);
+  background: rgba(34,197,94,0.08); border-color: var(--accent-edge);
+}
+.ro-card-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ro-card-label {
+  font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--fg-dim); font-weight: 600;
+}
+.ro-card-value {
+  font-size: 22px; font-weight: 500; letter-spacing: -0.01em;
+  color: var(--fg); display: flex; align-items: center; gap: 8px;
+}
+.v-led {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 6px var(--accent);
+}
+.v-led.off { background: var(--fg-faint); box-shadow: none; }
+.ro-seg-row { display: flex; gap: 4px; margin-top: 2px; }
+.ro-seg {
+  flex: 1; padding: 5px 0; text-align: center; border-radius: 6px;
+  font: 600 14px var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--fg-faint); background: var(--surface-2); border: 1px solid var(--border);
+}
+.ro-seg.on {
+  color: var(--accent); background: rgba(34,197,94,0.08); border-color: var(--accent-edge);
+}
+.ro-bars { display: flex; gap: 3px; margin-top: 4px; height: 6px; }
+.ro-bar { flex: 1; background: var(--surface-2); border: 1px solid var(--border); border-radius: 1px; }
+.ro-bar.on { background: var(--fg); border-color: var(--fg); }
+
+/* ── sub-screen header ── */
+.app-header { display: flex; align-items: center; justify-content: space-between; height: 36px; flex-shrink: 0; }
+.back-btn {
+  appearance: none; background: var(--surface); border: 1px solid var(--border-strong);
+  color: var(--fg); width: 40px; height: 40px; border-radius: 12px;
+  display: grid; place-items: center; cursor: pointer; font: inherit;
+  transition: all 0.15s ease;
+}
+.back-btn:hover { background: var(--surface-2); border-color: var(--fg-faint); }
+.sub-title-block { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.sub-eyebrow { font-size: 15px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--fg-dim); }
+.sub-title { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+
+/* ── debug screens ── */
+.debug-grid {
+  flex: 1; display: grid;
+  grid-template-columns: 1fr 1fr 460px;
+  gap: 16px; min-height: 0;
+}
+.panel {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); display: flex; flex-direction: column; min-height: 0;
+}
+.panel-head {
+  padding: 14px 18px 12px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.panel-title { font-size: 17px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-muted); }
+.panel-meta { font-size: 16px; color: var(--fg-dim); font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 8px; }
+.panel-body { flex: 1; overflow: hidden; padding: 6px 10px; display: flex; flex-direction: column; gap: 2px; }
+
+.prop-row {
+  display: grid; grid-template-columns: 16px 1fr auto;
+  align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px;
+}
+.prop-row:hover { background: rgba(255,255,255,0.02); }
+.prop-icon { width: 6px; height: 6px; border-radius: 50%; background: var(--fg-faint); margin-left: 5px; }
+.prop-row.read-only .prop-icon { background: transparent; border: 1px solid var(--fg-faint); }
+.prop-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.prop-name { font-size: 17px; color: var(--fg); font-weight: 500; }
+.prop-id { font-size: 15px; color: var(--fg-dim); font-family: var(--mono); letter-spacing: 0.02em; }
+.prop-actions { display: flex; gap: 4px; }
+.prop-btn {
+  appearance: none; background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--fg-muted); font: 500 14px var(--mono); padding: 6px 10px;
+  border-radius: 7px; cursor: pointer; transition: all 0.12s ease;
+  letter-spacing: 0.02em; min-width: 38px; font-variant-numeric: tabular-nums;
+}
+.prop-btn:hover { color: var(--fg); border-color: var(--fg-faint); }
+.prop-btn.active { background: var(--fg); color: #000; border-color: var(--fg); }
+.prop-readonly-val {
+  font: 500 15px var(--mono); color: var(--fg-muted);
+  padding: 4px 10px; background: rgba(255,255,255,0.03);
+  border-radius: 6px; font-variant-numeric: tabular-nums;
+  border: 1px solid var(--border);
+}
+
+/* ── log ── */
+.log {
+  font-family: var(--mono); font-size: 14px; line-height: 1.55;
+  padding: 10px 14px; flex: 1; overflow: hidden;
+  display: flex; flex-direction: column-reverse; gap: 1px;
+}
+.log-line { display: grid; grid-template-columns: 64px 60px 1fr; gap: 10px; padding: 2px 0; }
+.log-time { color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+.log-tag { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; color: var(--fg-muted); }
+.log-tag.write { color: var(--accent); }
+.log-tag.read  { color: #6dafff; }
+.log-tag.warn  { color: var(--warn); }
+.log-tag.info  { color: var(--fg-muted); }
+.log-msg { color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.log-msg .v { color: var(--fg-muted); }
+.log-msg .k { color: var(--fg-dim); }
+
+/* ── seat vent cards ── */
+.vent-cards { display: grid; grid-template-rows: 1fr 1fr; gap: 12px; min-height: 0; }
+.vent-card {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px 20px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.vent-card-head { display: flex; justify-content: space-between; align-items: baseline; }
+.vent-card-title { font-size: 16px; font-weight: 500; color: var(--fg); }
+.vent-card-tag { font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-dim); }
+.vent-card-body { display: flex; align-items: baseline; gap: 8px; }
+.vent-level { font-size: 38px; font-weight: 500; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.vent-of { color: var(--fg-dim); font-size: 17px; }
+.vent-bars { display: flex; gap: 4px; height: 8px; margin-top: 6px; }
+.vent-bar { flex: 1; background: var(--surface); border-radius: 2px; border: 1px solid var(--border); }
+.vent-bar.on { background: var(--fg); border-color: var(--fg); }
+
+/* ── display info screen ── */
+.display-grid {
+  flex: 1; display: grid;
+  grid-template-columns: 1fr 720px;
+  gap: 16px; min-height: 0;
+}
+.display-stats {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 8px 16px;
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 0 32px; align-content: start;
+}
+.dstat-row {
+  display: grid; grid-template-columns: 1fr auto;
+  align-items: center; padding: 14px 0;
+  border-bottom: 1px solid var(--border); gap: 16px;
+}
+.dstat-row.no-border { border-bottom: 0; }
+.dstat-label { font-size: 16px; color: var(--fg-muted); }
+.dstat-label .hint { color: var(--fg-dim); font-size: 14px; margin-left: 8px; }
+.dstat-val { font: 500 16px var(--mono); color: var(--fg); font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+.dstat-val .unit { color: var(--fg-dim); margin-left: 4px; font-weight: 400; }
+.display-viz {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 24px;
+  display: flex; flex-direction: column; gap: 16px; min-height: 0;
+}
+.viz-title { font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-muted); font-weight: 600; }
+.viz-frame {
+  flex: 1; background: #0a0a0a; border: 1px solid var(--border);
+  border-radius: 12px; position: relative; display: grid; place-items: center; overflow: hidden;
+}
+.viz-area {
+  border: 1px dashed var(--fg-faint); width: 78%; height: 70%;
+  border-radius: 6px; position: relative; display: grid; place-items: center;
+}
+.viz-label {
+  font: 500 13px var(--mono); color: var(--fg-muted);
+  background: var(--surface-2); padding: 6px 10px;
+  border-radius: 6px; font-variant-numeric: tabular-nums;
+}
+.viz-tick {
+  position: absolute; font: 500 10px var(--mono);
+  color: var(--fg-dim); letter-spacing: 0.04em; font-variant-numeric: tabular-nums;
+}
+
+/* ── tweaks panel ── */
+.twk-panel {
+  position: fixed; right: 16px; bottom: 16px; z-index: 9999; width: 260px;
+  background: rgba(250,249,247,0.85); color: #29261b;
+  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+  border: 0.5px solid rgba(255,255,255,0.6); border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+  font: 11.5px/1.4 ui-sans-serif,system-ui,sans-serif;
+}
+.twk-hd {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 10px 10px 14px; cursor: move; user-select: none;
+}
+.twk-hd b { font-size: 12px; font-weight: 600; }
+.twk-x {
+  appearance: none; border: 0; background: transparent;
+  color: rgba(41,38,27,0.5); width: 22px; height: 22px;
+  border-radius: 6px; cursor: pointer; font-size: 13px;
+}
+.twk-x:hover { background: rgba(0,0,0,0.06); color: #29261b; }
+.twk-body { padding: 2px 14px 14px; display: flex; flex-direction: column; gap: 8px; }
+.twk-sect { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(41,38,27,0.45); padding: 6px 0 0; }
+.twk-lbl { font-size: 11.5px; font-weight: 500; color: rgba(41,38,27,0.72); margin-bottom: 4px; }
+.twk-seg { display: flex; padding: 2px; border-radius: 8px; background: rgba(0,0,0,0.06); position: relative; }
+.twk-seg-thumb {
+  position: absolute; top: 2px; bottom: 2px; border-radius: 6px;
+  background: rgba(255,255,255,0.9); box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+  transition: left 0.15s, width 0.15s;
+}
+.twk-seg button {
+  appearance: none; position: relative; z-index: 1; flex: 1; border: 0;
+  background: transparent; color: inherit; font: inherit; font-weight: 500;
+  min-height: 22px; border-radius: 6px; cursor: pointer; padding: 3px 6px;
+}
+
+*::-webkit-scrollbar { display: none; }
 </style>
 </head>
 <body>
-
 <div class="stage-wrap">
-<div class="stage" id="stage">
-
-  <!-- ══════════════════════ HEADER ══════════════════════════ -->
-  <header class="app-header">
-    <div class="brand">
-      <div class="brand-mark">H</div>
-      <span class="brand-label">HAVAL · CLIMATE CONTROL</span>
-    </div>
-
-    <nav class="nav-tabs">
-      <div class="nav-tab active"><span class="num">01</span> Principal</div>
-      <div class="nav-tab"><span class="num">02</span> HVAC</div>
-      <div class="nav-tab"><span class="num">03</span> Assento</div>
-      <div class="nav-tab"><span class="num">04</span> Tela</div>
-    </nav>
-
-    <div class="status-cluster">
-      <div class="status-pill">
-        <span class="dot" id="status-dot"></span>
-        <span id="status-txt">online</span>
-      </div>
-      <span class="version">v1.5.1</span>
-    </div>
-  </header>
-
-  <!-- ══════════════════════ HERO 3 COL ══════════════════════ -->
-  <div class="hero">
-
-    <!-- ── LEFT: AUTO MASTER CARD ─────────────────────────── -->
-    <div class="auto-card on" id="auto-card" onclick="toggleAuto()">
-      <div>
-        <div class="ac-head">
-          <span class="ac-eyebrow">SERVIÇO</span>
-          <div class="ac-led">
-            <span class="ld" id="ac-ld"></span>
-            <span id="ac-led-txt">ON</span>
-          </div>
-        </div>
-        <div class="ac-body">
-          <div class="ac-icon-row">
-            <div class="ac-icon">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
-                <path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
-              </svg>
-            </div>
-            <div class="ac-title">Controle<br>Automático</div>
-          </div>
-          <div class="ac-state" id="ac-state">Sistema ativo — gerenciando AC e ventilação</div>
-        </div>
-      </div>
-
-      <div>
-        <div class="ac-toggle">
-          <span id="ac-toggle-txt">Habilitado</span>
-          <div class="switch" id="ac-switch"></div>
-        </div>
-        <div class="ac-foot">
-          <span>modo&nbsp;&nbsp;AUTO</span>
-          <span>HVAC · 16 props</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── CENTER: CAR VISUALIZATION ─────────────────────── -->
-    <div class="hero-center">
-      <div class="center-top">
-        <span class="center-eyebrow">TEMP. SETADA</span>
-        <div class="setpoint"><span class="v">24.0</span><span class="u">°C</span></div>
-      </div>
-
-      <div class="car-viz">
-        <svg viewBox="0 0 600 300" preserveAspectRatio="xMidYMid meet">
-          <defs>
-            <linearGradient id="bG" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#1c1c1c"/>
-              <stop offset="100%" stop-color="#0c0c0c"/>
-            </linearGradient>
-          </defs>
-
-          <!-- ground shadow -->
-          <ellipse cx="300" cy="294" rx="196" ry="7" fill="rgba(255,255,255,0.03)"/>
-
-          <!-- car body -->
-          <rect x="115" y="10" width="370" height="274" rx="32"
-                fill="url(#bG)" stroke="rgba(255,255,255,0.09)" stroke-width="1"/>
-
-          <!-- windshield -->
-          <path d="M137 28 Q300 12 463 28 L457 74 Q300 60 143 74 Z"
-                fill="rgba(255,255,255,0.025)" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
-
-          <!-- dash vents -->
-          <rect x="143" y="81" width="66" height="5" rx="2" fill="rgba(255,255,255,0.22)"/>
-          <rect x="221" y="81" width="66" height="5" rx="2" fill="rgba(255,255,255,0.22)"/>
-          <rect x="313" y="81" width="66" height="5" rx="2" fill="rgba(255,255,255,0.22)"/>
-          <rect x="391" y="81" width="66" height="5" rx="2" fill="rgba(255,255,255,0.22)"/>
-
-          <!-- center console -->
-          <rect x="281" y="98" width="38" height="164" rx="7"
-                fill="#0e0e0e" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
-
-          <!-- driver seat -->
-          <rect x="133" y="130" width="118" height="108" rx="13"
-                fill="#181818" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-          <rect x="143" y="138" width="98" height="32" rx="6" fill="rgba(255,255,255,0.02)"/>
-
-          <!-- passenger seat -->
-          <rect x="349" y="130" width="118" height="108" rx="13"
-                fill="#181818" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-          <rect x="359" y="138" width="98" height="32" rx="6" fill="rgba(255,255,255,0.02)"/>
-
-          <!-- steering wheel -->
-          <circle cx="192" cy="106" r="20" stroke="rgba(255,255,255,0.28)" stroke-width="2.5" fill="none"/>
-          <line x1="174" y1="106" x2="210" y2="106" stroke="rgba(255,255,255,0.24)" stroke-width="2.5" stroke-linecap="round"/>
-          <line x1="192" y1="110" x2="192" y2="124" stroke="rgba(255,255,255,0.24)" stroke-width="2.5" stroke-linecap="round"/>
-
-          <!-- airflow LEFT (towards driver) -->
-          <g id="flow-l" class="flow-l" stroke="rgba(255,255,255,0.48)" stroke-width="1.8" fill="none" stroke-linecap="round">
-            <path d="M176 86 Q145 148 138 172"/>
-            <path d="M210 86 Q165 155 152 190"/>
-            <path d="M244 86 Q215 152 204 196"/>
-            <path d="M254 86 Q237 143 233 184"/>
-          </g>
-          <!-- airflow RIGHT (towards passenger) -->
-          <g id="flow-r" class="flow-r" stroke="rgba(255,255,255,0.48)" stroke-width="1.8" fill="none" stroke-linecap="round">
-            <path d="M424 86 Q455 148 462 172"/>
-            <path d="M390 86 Q435 155 448 190"/>
-            <path d="M356 86 Q385 152 396 196"/>
-            <path d="M346 86 Q363 143 367 184"/>
-          </g>
-        </svg>
-      </div>
-
-      <div class="center-bottom">
-        <div class="hero-pill" id="hero-pill">
-          <span class="ldot" id="hero-ldot"></span>
-          <span id="hero-pill-txt">MONITORANDO</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── RIGHT: TEMP COLUMN ─────────────────────────────── -->
-    <div class="temp-col">
-      <div class="temp-card">
-        <div class="temp-head">
-          <span class="temp-lbl">TEMP. INTERNA</span>
-          <svg class="temp-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-            <path d="M14 14V5a2 2 0 1 0-4 0v9a4 4 0 1 0 4 0z"/><path d="M12 13V8"/>
-          </svg>
-        </div>
-        <div class="temp-val">27.3<span class="u">°C</span></div>
-        <div class="temp-foot">
-          <span>cabine</span>
-          <span class="delta">+3.3°</span>
-        </div>
-      </div>
-
-      <div class="temp-card">
-        <div class="temp-head">
-          <span class="temp-lbl">TEMP. EXTERNA</span>
-          <svg class="temp-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-            <circle cx="12" cy="12" r="9"/>
-            <path d="M3 12h18M12 3a13 13 0 0 1 0 18M12 3a13 13 0 0 0 0 18"/>
-          </svg>
-        </div>
-        <div class="temp-val">31.0<span class="u">°C</span></div>
-        <div class="temp-foot">
-          <span>ambiente</span>
-          <span class="delta">31.0°</span>
-        </div>
-      </div>
-    </div>
-
-  </div><!-- /hero -->
-
-  <!-- ══════════════════════ BOTTOM STRIP ════════════════════ -->
-  <div class="info-strip">
-
-    <!-- 1. Estado do AC -->
-    <div class="ro-card">
-      <div class="ro-icon on" id="ac-icon">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-          <path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93 4.93 19.07"/>
-          <circle cx="12" cy="12" r="2"/>
-        </svg>
-      </div>
-      <div class="ro-body">
-        <div class="ro-lbl">ESTADO DO AC</div>
-        <div class="ro-val">
-          <span id="ac-state-val">Ligado</span>
-          <span class="val-led" id="ac-val-led"></span>
-        </div>
-      </div>
-    </div>
-
-    <!-- 2. Modo Conforto -->
-    <div class="ro-card-col">
-      <div class="ro-lbl">MODO CONFORTO</div>
-      <div class="seg-row">
-        <div class="seg" id="seg-0">SUAVE</div>
-        <div class="seg on" id="seg-1">NORMAL</div>
-        <div class="seg" id="seg-2">FORTE</div>
-      </div>
-    </div>
-
-    <!-- 3. Ventilação Motorista -->
-    <div class="ro-card">
-      <div class="ro-icon">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-          <path d="M12 12a4 4 0 0 0-4-4c-1.6 0-3 .9-3.8 2.2"/>
-          <path d="M12 12a4 4 0 0 0 4 4c1.6 0 3-.9 3.8-2.2"/>
-          <path d="M12 12a4 4 0 0 1 4-4c1.6 0 3 .9 3.8 2.2"/>
-          <path d="M12 12a4 4 0 0 1-4 4c-1.6 0-3-.9-3.8-2.2"/>
-          <circle cx="12" cy="12" r="1.5"/>
-        </svg>
-      </div>
-      <div class="ro-body">
-        <div class="ro-lbl">VENTILAÇÃO MOTORISTA</div>
-        <div class="vent-val" id="vent-l-val">Nível 2</div>
-        <div class="bar-row" id="vent-l-bars">
-          <div class="bar on"></div><div class="bar on"></div><div class="bar"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 4. Ventilação Passageiro -->
-    <div class="ro-card">
-      <div class="ro-icon">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-          <path d="M12 12a4 4 0 0 0-4-4c-1.6 0-3 .9-3.8 2.2"/>
-          <path d="M12 12a4 4 0 0 0 4 4c1.6 0 3-.9 3.8-2.2"/>
-          <path d="M12 12a4 4 0 0 1 4-4c1.6 0 3 .9 3.8 2.2"/>
-          <path d="M12 12a4 4 0 0 1-4 4c-1.6 0-3-.9-3.8-2.2"/>
-          <circle cx="12" cy="12" r="1.5"/>
-        </svg>
-      </div>
-      <div class="ro-body">
-        <div class="ro-lbl">VENTILAÇÃO PASSAGEIRO</div>
-        <div class="vent-val" id="vent-r-val">Nível 2</div>
-        <div class="bar-row" id="vent-r-bars">
-          <div class="bar on"></div><div class="bar on"></div><div class="bar"></div>
-        </div>
-      </div>
-    </div>
-
-  </div><!-- /info-strip -->
-
-</div><!-- /stage -->
-</div><!-- /stage-wrap -->
-
-<!-- ══════════════════════ TWEAKS ════════════════════════════ -->
-<div class="tweaks">
-  <div class="tweaks-title">Preview Controls</div>
-  <label>
-    <input type="checkbox" id="chk-auto" checked onchange="setAuto(this.checked)">
-    Controle Automático ON
-  </label>
-  <label>
-    <input type="checkbox" id="chk-ac" checked onchange="setAcState(this.checked)">
-    AC Ligado
-  </label>
-  <label>
-    <input type="checkbox" id="chk-conn" checked onchange="setConnected(this.checked)">
-    Online / Conectado
-  </label>
-  <label>
-    <span>Conforto:</span>
-    <select id="sel-comfort" onchange="setComfort(this.value)">
-      <option value="0">Suave</option>
-      <option value="1" selected>Normal</option>
-      <option value="2">Forte</option>
-    </select>
-  </label>
-  <label>
-    <span>Ventilação:</span>
-    <select id="sel-vent" onchange="setVent(this.value)">
-      <option value="0">Off</option>
-      <option value="1">Nível 1</option>
-      <option value="2" selected>Nível 2</option>
-      <option value="3">Nível 3</option>
-    </select>
-  </label>
+  <div class="stage" data-theme="pure-black">
+    <div id="root"></div>
+  </div>
 </div>
 
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+
+<!-- data -->
 <script>
-// ── scale to fit viewport ──────────────────────────────────
-function scaleStage() {
-  const s = document.getElementById('stage');
-  const scale = Math.min(window.innerWidth / 1792, window.innerHeight / 660);
-  s.style.transform = `scale(${scale})`;
-}
-window.addEventListener('resize', scaleStage);
-scaleStage();
+window.HAVAL_DATA = {
+  hvac: {
+    props: [
+      { id:"HVAC_POWER_ON",     name:"HVAC Master Power",     kind:"toggle", value:1 },
+      { id:"AC_ON",             name:"AC Compressor",         kind:"toggle", value:1 },
+      { id:"AUTO_MODE",         name:"Auto Mode",             kind:"toggle", value:1 },
+      { id:"RECIRC_ON",         name:"Recirculation",         kind:"toggle", value:0 },
+      { id:"DEFROSTER_FRONT",   name:"Defroster — Front",     kind:"toggle", value:0 },
+      { id:"DEFROSTER_REAR",    name:"Defroster — Rear",      kind:"toggle", value:0 },
+      { id:"MAX_AC",            name:"Max AC",                kind:"toggle", value:0 },
+      { id:"ECO_MODE",          name:"ECO Mode",              kind:"toggle", value:1 },
+      { id:"STEERING_HEATER",   name:"Steering Wheel Heater", kind:"toggle", value:0 },
+      { id:"FAN_SPEED",         name:"Fan Speed",             kind:"range",  value:4, options:["0","1","2","3","4","5","6","7"] },
+      { id:"TEMP_SETPOINT_L",   name:"Setpoint · Driver",     kind:"range",  value:24, options:["18","20","22","24","26","28","30"], unit:"°C" },
+      { id:"TEMP_SETPOINT_R",   name:"Setpoint · Passenger",  kind:"range",  value:24, options:["18","20","22","24","26","28","30"], unit:"°C" },
+      { id:"AIR_DISTRIBUTION",  name:"Air Distribution",      kind:"range",  value:2, options:["FACE","FEET","F+F","DEF","WSHLD","ALL"] },
+      { id:"SYNC_TEMP",         name:"Sync L/R Temperatures", kind:"toggle", value:1 },
+      { id:"AUTO_LIGHT_SENSOR", name:"Auto Light Sensor",     kind:"toggle", value:1 },
+      { id:"AQS_MODE",          name:"Air Quality Sensor",    kind:"range",  value:1, options:["OFF","AUTO","HIGH"] },
+    ],
+    sensors: [
+      { id:"CABIN_TEMP",     name:"Cabin Temperature",   value:"27.3", unit:"°C" },
+      { id:"OUTSIDE_TEMP",   name:"Outside Temperature", value:"31.0", unit:"°C" },
+      { id:"CABIN_HUMIDITY", name:"Cabin Humidity",      value:"48",   unit:"%" },
+      { id:"SOLAR_LOAD",     name:"Solar Load",          value:"642",  unit:"W/m²" },
+      { id:"EVAP_TEMP",      name:"Evaporator Temp.",    value:"4.8",  unit:"°C" },
+      { id:"AC_PRESSURE",    name:"AC Pressure",         value:"12.4", unit:"bar" },
+    ],
+    log: [
+      { t:"12:04:18", tag:"write", msg:'set FAN_SPEED <span class="k">→</span> <span class="v">4</span>' },
+      { t:"12:04:18", tag:"write", msg:'set AC_ON <span class="k">→</span> <span class="v">1</span>' },
+      { t:"12:04:17", tag:"info",  msg:'auto loop tick · target <span class="v">24.0°C</span> · cabin <span class="v">27.3°C</span>' },
+      { t:"12:04:14", tag:"read",  msg:'CABIN_TEMP <span class="k">=</span> <span class="v">27.3°C</span>' },
+      { t:"12:04:14", tag:"read",  msg:'OUTSIDE_TEMP <span class="k">=</span> <span class="v">31.0°C</span>' },
+      { t:"12:04:11", tag:"write", msg:'set TEMP_SETPOINT_L <span class="k">→</span> <span class="v">24°C</span>' },
+      { t:"12:04:09", tag:"warn",  msg:'AQS spike — cabin CO₂ <span class="v">1140 ppm</span>' },
+      { t:"12:04:02", tag:"info",  msg:'comfort mode <span class="v">NORMAL</span> engaged' },
+      { t:"12:03:58", tag:"write", msg:'set HVAC_POWER_ON <span class="k">→</span> <span class="v">1</span>' },
+      { t:"12:03:58", tag:"info",  msg:'CarPropertyManager registered · 16 props' },
+    ],
+  },
+  seat: {
+    props: [
+      { id:"SEAT_HEATER_L",     name:"Heater · Driver",         kind:"range",  value:2, options:["0","1","2","3"] },
+      { id:"SEAT_HEATER_R",     name:"Heater · Passenger",      kind:"range",  value:0, options:["0","1","2","3"] },
+      { id:"SEAT_MEMORY_L",     name:"Memory Recall · Driver",  kind:"range",  value:1, options:["1","2","3"] },
+      { id:"SEAT_MEMORY_R",     name:"Memory Recall · Pass.",   kind:"range",  value:1, options:["1","2","3"] },
+      { id:"SEAT_LUMBAR_L",     name:"Lumbar · Driver",         kind:"range",  value:3, options:["0","1","2","3","4"] },
+      { id:"SEAT_LUMBAR_R",     name:"Lumbar · Passenger",      kind:"range",  value:2, options:["0","1","2","3","4"] },
+      { id:"SEAT_MASSAGE_L",    name:"Massage · Driver",        kind:"toggle", value:0 },
+      { id:"SEAT_MASSAGE_R",    name:"Massage · Passenger",     kind:"toggle", value:0 },
+      { id:"SEAT_RECLINE_L",    name:"Recline Memory · Driver", kind:"range",  value:2, options:["1","2","3"] },
+      { id:"SEAT_BELT_PRETENS", name:"Belt Pretensioner",       kind:"toggle", value:1 },
+    ],
+    log: [
+      { t:"12:04:18", tag:"write", msg:'set SEAT_VENT_L <span class="k">→</span> <span class="v">2</span> <span class="k">(auto)</span>' },
+      { t:"12:04:18", tag:"write", msg:'set SEAT_VENT_R <span class="k">→</span> <span class="v">2</span> <span class="k">(auto)</span>' },
+      { t:"12:04:11", tag:"write", msg:'set SEAT_HEATER_L <span class="k">→</span> <span class="v">2</span>' },
+      { t:"12:04:09", tag:"write", msg:'set SEAT_LUMBAR_L <span class="k">→</span> <span class="v">3</span>' },
+      { t:"12:04:02", tag:"info",  msg:'memory recall <span class="v">slot 1</span> · driver' },
+      { t:"12:03:58", tag:"info",  msg:'seat module ready' },
+    ],
+  },
+  display: {
+    rows: [
+      { label:"Resolution",   hint:"px",          value:"1792 × 660", unit:"px" },
+      { label:"Logical size", hint:"dp",          value:"1792 × 660", unit:"dp" },
+      { label:"Density",      hint:"dpi bucket",  value:"160",        unit:"dpi · mdpi" },
+      { label:"Scale factor", hint:"1 dp = 1 px", value:"1.00",       unit:"×" },
+      { label:"Physical DPI", hint:"measured",    value:"320",        unit:"dpi" },
+      { label:"Aspect ratio", hint:"w : h",       value:"2.715",      unit:": 1" },
+      { label:"Refresh rate", hint:"",            value:"60",         unit:"Hz" },
+      { label:"Color depth",  hint:"sRGB",        value:"24",         unit:"bit" },
+      { label:"Touch points", hint:"max",         value:"10",         unit:"" },
+      { label:"Orientation",  hint:"",            value:"Landscape",  unit:"" },
+    ],
+  },
+};
+</script>
 
-// ── auto toggle ────────────────────────────────────────────
-function setAuto(on) {
-  document.getElementById('chk-auto').checked = on;
-  document.getElementById('auto-card').classList.toggle('on', on);
-  document.getElementById('ac-ld').style.background       = on ? 'var(--accent)' : 'var(--fg-faint)';
-  document.getElementById('ac-ld').style.boxShadow        = on ? '0 0 8px var(--accent)' : 'none';
-  document.getElementById('ac-led-txt').textContent       = on ? 'ON' : 'OFF';
-  document.getElementById('ac-state').textContent         = on
-    ? 'Sistema ativo — gerenciando AC e ventilação'
-    : 'Desativado — controle manual via painel HVAC';
-  document.getElementById('ac-toggle-txt').textContent   = on ? 'Habilitado' : 'Toque para ativar';
-  document.getElementById('flow-l').style.display        = on ? '' : 'none';
-  document.getElementById('flow-r').style.display        = on ? '' : 'none';
-  document.getElementById('hero-ldot').style.display     = on ? '' : 'none';
-  document.getElementById('hero-pill-txt').textContent   = on ? 'MONITORANDO' : 'PARADO';
-}
-function toggleAuto() {
-  setAuto(!document.getElementById('chk-auto').checked);
+<!-- app -->
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ── icons ────────────────────────────────────────────────────
+const PATHS = {
+  auto:    <g><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M2 12h3M19 12h3M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12"/></g>,
+  cabin:   <g><path d="M3 12l9-8 9 8M5 11v9h14v-9"/><path d="M9 20v-5h6v5"/></g>,
+  ext:     <g><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a13 13 0 010 18M12 3a13 13 0 000 18"/></g>,
+  acState: <g><path d="M12 3v18M5 7l14 10M5 17l14-10"/><circle cx="12" cy="12" r="2"/></g>,
+  comfort: <g><path d="M3 12h2M19 12h2M12 3v2M12 19v2"/><circle cx="12" cy="12" r="5"/><path d="M12 9v3l2 2"/></g>,
+  seat:    <g><path d="M5 14h10v5H5z"/><path d="M7 14V6a3 3 0 013-3h2a3 3 0 013 3v8"/><path d="M15 19l4 2v-7l-4-2"/></g>,
+  back:    <g><path d="M10 3L5 8L10 13"/></g>,
+};
+function Icon({ n, size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      {PATHS[n]}
+    </svg>
+  );
 }
 
-// ── AC state ───────────────────────────────────────────────
-function setAcState(on) {
-  document.getElementById('ac-state-val').textContent = on ? 'Ligado' : 'Desligado';
-  const led  = document.getElementById('ac-val-led');
-  const icon = document.getElementById('ac-icon');
-  led.classList.toggle('off', !on);
-  icon.classList.toggle('on', on);
+// ── shared UI ────────────────────────────────────────────────
+function Brand() {
+  return (
+    <div className="brand">
+      <span className="brand-mark">H</span>
+      <span>Haval</span>
+      <span className="sep">·</span>
+      <span>Climate Control</span>
+    </div>
+  );
 }
 
-// ── connected ──────────────────────────────────────────────
-function setConnected(on) {
-  document.getElementById('status-dot').classList.toggle('off', !on);
-  document.getElementById('status-txt').textContent = on ? 'online' : 'offline';
+function NavTabs({ current, onNav }) {
+  const tabs = [
+    { id:"main",    label:"Principal" },
+    { id:"hvac",    label:"HVAC" },
+    { id:"seat",    label:"Assento" },
+    { id:"display", label:"Tela" },
+  ];
+  return (
+    <div className="nav-tabs">
+      {tabs.map((t, i) => (
+        <button key={t.id} className={"nav-tab" + (current === t.id ? " active" : "")} onClick={() => onNav(t.id)}>
+          <span className="tab-num">{String(i+1).padStart(2,"0")}</span>
+          <span>{t.label}</span>
+        </button>
+      ))}
+    </div>
+  );
 }
 
-// ── comfort ────────────────────────────────────────────────
-function setComfort(v) {
-  [0,1,2].forEach(i => document.getElementById('seg-'+i).classList.toggle('on', String(i) === v));
+function StatusPill({ on = true, children }) {
+  return (
+    <span className="status-pill">
+      <span className={"dot" + (on ? "" : " idle")}></span>
+      {children}
+    </span>
+  );
 }
 
-// ── vent ───────────────────────────────────────────────────
-function setVent(v) {
-  const n      = parseInt(v);
-  const labels = ['Off','Nível 1','Nível 2','Nível 3'];
-  document.getElementById('vent-l-val').textContent = labels[n];
-  document.getElementById('vent-r-val').textContent = labels[n];
-  ['vent-l-bars','vent-r-bars'].forEach(id => {
-    document.getElementById(id).querySelectorAll('.bar')
-      .forEach((b, i) => b.classList.toggle('on', i < n));
+function SubHeader({ eyebrow, title, onBack, current, onNav, right }) {
+  return (
+    <div className="app-header">
+      <div style={{ display:"flex", alignItems:"center", gap:16 }}>
+        <button className="back-btn" onClick={onBack} aria-label="Voltar">
+          <Icon n="back" size={16} />
+        </button>
+        <div className="sub-title-block">
+          <div className="sub-eyebrow">{eyebrow}</div>
+          <div className="sub-title">{title}</div>
+        </div>
+      </div>
+      <NavTabs current={current} onNav={onNav} />
+      <div className="status-cluster">{right}</div>
+    </div>
+  );
+}
+
+// ── car viz ──────────────────────────────────────────────────
+function CarViz({ autoOn }) {
+  return (
+    <svg viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <linearGradient id="bG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#262626"/>
+          <stop offset="100%" stopColor="#0d0d0d"/>
+        </linearGradient>
+        <radialGradient id="sG" cx="0.5" cy="0.3">
+          <stop offset="0%" stopColor="#242424"/>
+          <stop offset="100%" stopColor="#121212"/>
+        </radialGradient>
+      </defs>
+      <ellipse cx="300" cy="290" rx="200" ry="12" fill="rgba(255,255,255,0.04)"/>
+      <g transform="translate(180 10)">
+        <path d="M 30 60 C 30 30, 60 0, 120 0 C 180 0, 210 30, 210 60 L 210 240 C 210 262, 188 272, 165 272 L 75 272 C 52 272, 30 262, 30 240 Z"
+          fill="url(#bG)" stroke="rgba(255,255,255,0.08)" strokeWidth="1"/>
+        <path d="M 50 26 Q 120 12 190 26" stroke="rgba(255,255,255,0.06)" strokeWidth="1" fill="none"/>
+        <path d="M 56 70 Q 120 56 184 70 L 178 116 Q 120 105 62 116 Z"
+          fill="rgba(255,255,255,0.025)" stroke="rgba(255,255,255,0.06)" strokeWidth="1"/>
+        <path d="M 56 124 Q 120 112 184 124" stroke="rgba(255,255,255,0.1)" strokeWidth="1" fill="none"/>
+        <g transform="translate(78 142)">
+          <circle r="14" fill="none" stroke="rgba(255,255,255,0.32)" strokeWidth="1.6"/>
+          <circle r="3" fill="rgba(255,255,255,0.4)"/>
+          <path d="M -12 0 L 12 0 M 0 3 L 0 12" stroke="rgba(255,255,255,0.3)" strokeWidth="1.6" strokeLinecap="round"/>
+        </g>
+        <g transform="translate(78 200)">
+          <rect x="-26" y="-18" width="52" height="50" rx="9" fill="url(#sG)" stroke="rgba(255,255,255,0.1)"/>
+          <rect x="-20" y="-12" width="40" height="18" rx="5" fill="rgba(255,255,255,0.04)"/>
+        </g>
+        <g transform="translate(162 200)">
+          <rect x="-26" y="-18" width="52" height="50" rx="9" fill="url(#sG)" stroke="rgba(255,255,255,0.1)"/>
+          <rect x="-20" y="-12" width="40" height="18" rx="5" fill="rgba(255,255,255,0.04)"/>
+        </g>
+        <rect x="113" y="124" width="14" height="138" rx="3" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.06)"/>
+        <g fill="rgba(255,255,255,0.2)">
+          <rect x="60"  y="128" width="20" height="3" rx="1.5"/>
+          <rect x="86"  y="128" width="20" height="3" rx="1.5"/>
+          <rect x="134" y="128" width="20" height="3" rx="1.5"/>
+          <rect x="160" y="128" width="20" height="3" rx="1.5"/>
+        </g>
+      </g>
+      {autoOn && <>
+        <g className="flow flow-l" stroke="rgba(255,255,255,0.55)" strokeWidth="1.4" strokeLinecap="round" fill="none" strokeDasharray="6 8">
+          <path d="M 250 155 Q 190 172 110 198"/>
+          <path d="M 250 175 Q 180 200 100 232"/>
+          <path d="M 250 195 Q 190 215 120 258"/>
+          <path d="M 250 210 Q 210 228 152 268"/>
+        </g>
+        <g className="flow flow-r" stroke="rgba(255,255,255,0.55)" strokeWidth="1.4" strokeLinecap="round" fill="none" strokeDasharray="6 8">
+          <path d="M 350 155 Q 410 172 490 198"/>
+          <path d="M 350 175 Q 420 200 500 232"/>
+          <path d="M 350 195 Q 410 215 480 258"/>
+          <path d="M 350 210 Q 390 228 448 268"/>
+        </g>
+      </>}
+    </svg>
+  );
+}
+
+// ── main screen ──────────────────────────────────────────────
+function MainScreen({ state, setState, onNav }) {
+  const { autoOn, comfortMode, setpoint, cabinTemp, outsideTemp, acOn, ventL, ventR } = state;
+  const comfortModes = ["AUTO","SUAVE","NORMAL","FORTE"];
+  const CURVE_NAMES  = ["SUAVE","NORMAL","FORTE"];
+  const resolvedCurveIdx = comfortMode === "AUTO"
+    ? (outsideTemp >= 24 ? 2 : outsideTemp >= 19 ? 1 : 0)
+    : null;
+  function cycleComfort() {
+    setState(s => {
+      const idx = comfortModes.indexOf(s.comfortMode);
+      return { ...s, comfortMode: comfortModes[(idx + 1) % comfortModes.length] };
+    });
+  }
+  const diff = (cabinTemp - setpoint).toFixed(1);
+
+  return (
+    <div className="app">
+      <header className="app-header">
+        <Brand/>
+        <NavTabs current="main" onNav={onNav}/>
+        <div className="status-cluster">
+          <StatusPill on>online</StatusPill>
+          <span style={{ fontFamily:"var(--mono)", fontSize:11, color:"var(--fg-dim)" }}>v1.5.0</span>
+        </div>
+      </header>
+
+      <div className="main-grid">
+        <div className="hero-3col">
+
+          {/* left: auto control */}
+          <div className={"auto-card" + (autoOn ? " on" : "")}
+               onClick={() => setState(s => ({...s, autoOn: !s.autoOn}))}
+               role="switch" aria-checked={autoOn}>
+            <div className="auto-card-head">
+              <div className="auto-card-eyebrow">Serviço</div>
+              <div className="auto-card-led">
+                <span className="ld"></span>
+                {autoOn ? "ON" : "OFF"}
+              </div>
+            </div>
+            <div className="auto-card-body">
+              <div className="auto-card-icon-row">
+                <div className="auto-card-icon"><Icon n="auto" size={28}/></div>
+                <div className="auto-card-title">Climatização<br/>Inteligente</div>
+              </div>
+              <div className="auto-card-state">
+                {autoOn
+                  ? "Sistema ativo — gerenciando AC, ventilação e bancos"
+                  : "Desativado — controle manual via painel HVAC"}
+              </div>
+            </div>
+            <div className="auto-toggle">
+              <span style={{ fontWeight:500 }}>Modo Automático</span>
+              <div className="toggle-switch-mini"></div>
+            </div>
+          </div>
+
+          {/* center: car viz */}
+          <div className="hero-center">
+            <div className="hero-center-top">
+              <div className="hero-center-eyebrow">Veículo · Climatização</div>
+              <div className="hero-setpoint">
+                <span className="lab">Temp. Setada</span>
+                <span className="v">{setpoint.toFixed(1)}</span>
+                <span className="u">°C</span>
+              </div>
+            </div>
+            <div className="car-viz"><CarViz autoOn={autoOn}/></div>
+            <div className="hero-center-bottom">
+              <span className={"hero-pill" + (autoOn ? "" : " idle")}>
+                <span className="ldot"></span>
+                {autoOn ? "Auto · monitorando" : "Auto · pausado"}
+              </span>
+              <span className="hero-pill idle">
+                Δ {diff}°C vs setpoint
+              </span>
+            </div>
+          </div>
+
+          {/* right: temps */}
+          <div className="hero-right">
+            <div className="temp-card">
+              <div className="temp-card-head">
+                <div className="temp-card-label">Temperatura Interna</div>
+                <div className="temp-card-icon"><Icon n="cabin" size={20}/></div>
+              </div>
+              <div className="temp-card-value">{cabinTemp.toFixed(1)}<span className="unit">°C</span></div>
+              <div className="temp-card-foot">
+                <span>cabine · sensor frontal</span>
+                <span className="delta">+{diff}° vs alvo</span>
+              </div>
+            </div>
+            <div className="temp-card">
+              <div className="temp-card-head">
+                <div className="temp-card-label">Temperatura Externa</div>
+                <div className="temp-card-icon"><Icon n="ext" size={20}/></div>
+              </div>
+              <div className="temp-card-value">{outsideTemp.toFixed(1)}<span className="unit">°C</span></div>
+              <div className="temp-card-foot">
+                <span>ambiente · sensor frontal</span>
+                <span className="delta">Δ {(outsideTemp - cabinTemp).toFixed(1)}° vs cabine</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        {/* bottom: 4 read-only cards */}
+        <div className="info-strip">
+
+          <div className={"ro-card" + (acOn ? " on" : "")}>
+            <div className="ro-card-icon"><Icon n="acState" size={20}/></div>
+            <div className="ro-card-body">
+              <div className="ro-card-label">Estado do AC</div>
+              <div className="ro-card-value">
+                <span className={"v-led" + (acOn ? "" : " off")}></span>
+                <span>{acOn ? "Ligado" : "Desligado"}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="ro-card on" onClick={cycleComfort} style={{ cursor:"pointer" }}>
+            <div className="ro-card-icon"><Icon n="comfort" size={20}/></div>
+            <div className="ro-card-body">
+              <div className="ro-card-label">Modo Conforto</div>
+              <div className="ro-seg-row">
+                {comfortModes.map(o => <span key={o} className={"ro-seg" + (o === comfortMode ? " on" : "")}>{o}</span>)}
+              </div>
+              {comfortMode === "AUTO" && (
+                <div style={{ fontSize:10, color:"var(--fg-dim)", marginTop:3, fontFamily:"var(--mono)" }}>
+                  {"→ " + CURVE_NAMES[resolvedCurveIdx] + " · " + outsideTemp.toFixed(1) + "°C ext."}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className={"ro-card" + (ventL > 0 ? " on" : "")}>
+            <div className="ro-card-icon"><Icon n="seat" size={20}/></div>
+            <div className="ro-card-body">
+              <div className="ro-card-label">Ventilação · Motorista</div>
+              <div className="ro-card-value" style={{ alignItems:"baseline" }}>
+                <span>Nível {ventL}</span>
+                <span style={{ fontSize:11, color:"var(--fg-dim)" }}>
+                  · {ventL === 0 ? "OFF" : ventL === 3 ? "MAX" : `${ventL}/3`}
+                </span>
+              </div>
+              <div className="ro-bars">
+                {[0,1,2].map(i => <div key={i} className={"ro-bar" + (i < ventL ? " on" : "")}></div>)}
+              </div>
+            </div>
+          </div>
+
+          <div className={"ro-card" + (ventR > 0 ? " on" : "")}>
+            <div className="ro-card-icon"><Icon n="seat" size={20}/></div>
+            <div className="ro-card-body">
+              <div className="ro-card-label">Ventilação · Passageiro</div>
+              <div className="ro-card-value" style={{ alignItems:"baseline" }}>
+                <span>Nível {ventR}</span>
+                <span style={{ fontSize:11, color:"var(--fg-dim)" }}>
+                  · {ventR === 0 ? "OFF" : ventR === 3 ? "MAX" : `${ventR}/3`}
+                </span>
+              </div>
+              <div className="ro-bars">
+                {[0,1,2].map(i => <div key={i} className={"ro-bar" + (i < ventR ? " on" : "")}></div>)}
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── HVAC debug screen ────────────────────────────────────────
+function PropRow({ p, onChange }) {
+  return (
+    <div className="prop-row">
+      <span className="prop-icon"></span>
+      <div className="prop-info">
+        <div className="prop-name">{p.name}</div>
+        <div className="prop-id">{p.id}</div>
+      </div>
+      <div className="prop-actions">
+        {p.kind === "toggle" ? (
+          <>
+            <button className={"prop-btn" + (p.value === 0 ? " active" : "")} onClick={() => onChange(p.id, 0)}>0</button>
+            <button className={"prop-btn" + (p.value === 1 ? " active" : "")} onClick={() => onChange(p.id, 1)}>1</button>
+          </>
+        ) : p.options.map((opt, i) => (
+          <button key={i}
+            className={"prop-btn" + (p.value === (isNaN(+opt) ? i : +opt) ? " active" : "")}
+            onClick={() => onChange(p.id, isNaN(+opt) ? i : +opt)}>
+            {opt}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LogPanel({ entries, title }) {
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <div className="panel-title">{title}</div>
+        <div className="panel-meta">
+          <span style={{ width:6, height:6, borderRadius:"50%", background:"var(--accent)", boxShadow:"0 0 6px var(--accent)", display:"inline-block" }}></span>
+          {entries.length} entries · live
+        </div>
+      </div>
+      <div className="log">
+        {entries.map((e, i) => (
+          <div className="log-line" key={i}>
+            <span className="log-time">{e.t}</span>
+            <span className={"log-tag " + e.tag}>{e.tag}</span>
+            <span className="log-msg" dangerouslySetInnerHTML={{ __html: e.msg }}/>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HvacScreen({ onNav }) {
+  const [props, setProps] = useState(HAVAL_DATA.hvac.props);
+  const onChange = (id, v) => setProps(ps => ps.map(p => p.id === id ? {...p, value:v} : p));
+  const half = Math.ceil(props.length / 2);
+
+  return (
+    <div className="app">
+      <SubHeader
+        eyebrow="HVAC · Debug" title="Climate Hardware Layer"
+        onBack={() => onNav("main")} current="hvac" onNav={onNav}
+        right={<><StatusPill on>CarPropertyMgr</StatusPill>
+          <span style={{ fontFamily:"var(--mono)", fontSize:11, color:"var(--fg-dim)" }}>16 props · 6 sensors</span></>}
+      />
+      <div className="debug-grid">
+        <div className="panel">
+          <div className="panel-head">
+            <div className="panel-title">Propriedades · Set</div>
+            <div className="panel-meta">{props.length} writable</div>
+          </div>
+          <div className="panel-body">
+            {props.slice(0, half).map(p => <PropRow key={p.id} p={p} onChange={onChange}/>)}
+          </div>
+        </div>
+
+        <div className="panel" style={{ display:"grid", gridTemplateRows:"auto 1fr auto auto", minHeight:0 }}>
+          <div className="panel-head">
+            <div className="panel-title">Propriedades · Set (cont.)</div>
+            <div className="panel-meta">writable</div>
+          </div>
+          <div className="panel-body">
+            {props.slice(half).map(p => <PropRow key={p.id} p={p} onChange={onChange}/>)}
+          </div>
+          <div className="panel-head" style={{ borderTop:"1px solid var(--border)" }}>
+            <div className="panel-title">Sensores · Read-only</div>
+            <div className="panel-meta">{HAVAL_DATA.hvac.sensors.length} sensores</div>
+          </div>
+          <div className="panel-body" style={{ paddingBottom:10 }}>
+            {HAVAL_DATA.hvac.sensors.map(s => (
+              <div className="prop-row read-only" key={s.id}>
+                <span className="prop-icon"></span>
+                <div className="prop-info">
+                  <div className="prop-name">{s.name}</div>
+                  <div className="prop-id">{s.id}</div>
+                </div>
+                <div className="prop-actions">
+                  <span className="prop-readonly-val">{s.value} {s.unit}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <LogPanel entries={HAVAL_DATA.hvac.log} title="Log de ações HVAC"/>
+      </div>
+    </div>
+  );
+}
+
+// ── seat screen ──────────────────────────────────────────────
+function SeatScreen({ onNav, ventL, ventR }) {
+  const [props, setProps] = useState(HAVAL_DATA.seat.props);
+  const onChange = (id, v) => setProps(ps => ps.map(p => p.id === id ? {...p, value:v} : p));
+
+  return (
+    <div className="app">
+      <SubHeader
+        eyebrow="Assento · Debug" title="Seat Memory & Comfort"
+        onBack={() => onNav("main")} current="seat" onNav={onNav}
+        right={<><StatusPill on>Seat Module</StatusPill>
+          <span style={{ fontFamily:"var(--mono)", fontSize:11, color:"var(--fg-dim)" }}>10 props</span></>}
+      />
+      <div className="debug-grid">
+        <div className="panel">
+          <div className="panel-head">
+            <div className="panel-title">Propriedades de Memória</div>
+            <div className="panel-meta">{props.length} writable</div>
+          </div>
+          <div className="panel-body">
+            {props.map(p => <PropRow key={p.id} p={p} onChange={onChange}/>)}
+          </div>
+        </div>
+
+        <div className="panel" style={{ display:"flex", flexDirection:"column", minHeight:0 }}>
+          <div className="panel-head">
+            <div className="panel-title">Ventilação · Read-only (auto)</div>
+            <div className="panel-meta">live · 2 zonas</div>
+          </div>
+          <div className="panel-body" style={{ padding:16, gap:12 }}>
+            <div className="vent-cards" style={{ flex:1 }}>
+              {[["Motorista", ventL],["Passageiro", ventR]].map(([side, level]) => (
+                <div className="vent-card" key={side}>
+                  <div className="vent-card-head">
+                    <div className="vent-card-title">Ventilação · {side}</div>
+                    <div className="vent-card-tag">controlado · auto</div>
+                  </div>
+                  <div className="vent-card-body">
+                    <span className="vent-level">{level}</span>
+                    <span className="vent-of">/ 3</span>
+                    <div style={{ flex:1, color:"var(--fg-dim)", fontSize:12, textAlign:"right" }}>
+                      {level === 0 ? "OFF" : level === 3 ? "MAX" : `Nível ${level}`}
+                    </div>
+                  </div>
+                  <div className="vent-bars">
+                    {[0,1,2].map(i => <div key={i} className={"vent-bar" + (i < level ? " on" : "")}></div>)}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ padding:"12px 16px", background:"var(--surface-2)", border:"1px solid var(--border)", borderRadius:12, fontSize:12, color:"var(--fg-muted)", lineHeight:1.5 }}>
+              <div style={{ fontSize:10, letterSpacing:"0.1em", textTransform:"uppercase", color:"var(--fg-dim)", marginBottom:6 }}>Lógica</div>
+              Níveis de ventilação definidos pelo serviço com base em
+              <span style={{ color:"var(--fg)" }}> CABIN_TEMP</span>,
+              <span style={{ color:"var(--fg)" }}> SOLAR_LOAD</span> e modo de conforto ativo.
+              Valores manuais são sobrescritos a cada ciclo (2.0 s).
+            </div>
+          </div>
+        </div>
+
+        <LogPanel entries={HAVAL_DATA.seat.log} title="Log de ações Assento"/>
+      </div>
+    </div>
+  );
+}
+
+// ── display info screen ──────────────────────────────────────
+function DisplayScreen({ onNav }) {
+  const rows = HAVAL_DATA.display.rows;
+  return (
+    <div className="app">
+      <SubHeader
+        eyebrow="Tela · Display Info" title="Métricas da Tela Multimídia"
+        onBack={() => onNav("main")} current="display" onNav={onNav}
+        right={<><StatusPill on>DisplayManager</StatusPill>
+          <span style={{ fontFamily:"var(--mono)", fontSize:11, color:"var(--fg-dim)" }}>display 0 · default</span></>}
+      />
+      <div className="display-grid">
+        <div className="display-stats">
+          {rows.map((r, i) => (
+            <div key={i} className={"dstat-row" + (i >= rows.length - 2 ? " no-border" : "")}>
+              <div className="dstat-label">
+                {r.label}
+                {r.hint && <span className="hint">{r.hint}</span>}
+              </div>
+              <div className="dstat-val">
+                {r.value}
+                {r.unit && <span className="unit"> {r.unit}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="display-viz">
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div className="viz-title">Visualização · 1 dp = 1 px</div>
+            <div style={{ fontFamily:"var(--mono)", fontSize:11, color:"var(--fg-dim)" }}>
+              <span style={{ color:"var(--fg-muted)" }}>1792</span> × <span style={{ color:"var(--fg-muted)" }}>660</span> dp
+            </div>
+          </div>
+          <div className="viz-frame">
+            <span className="viz-tick" style={{ top:8, left:14 }}>0,0</span>
+            <span className="viz-tick" style={{ top:8, right:14 }}>1792,0</span>
+            <span className="viz-tick" style={{ bottom:8, left:14 }}>0,660</span>
+            <span className="viz-tick" style={{ bottom:8, right:14 }}>1792,660</span>
+            <div className="viz-area"><div className="viz-label">área útil · 1792 × 660 dp</div></div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
+            {[["fator","1.00×","scale"],["densidade","160 dpi","mdpi bucket"],["touch","10 pts","multitouch"]].map(([k,v,sub],i) => (
+              <div key={i} style={{ padding:"10px 14px", background:"var(--surface-2)", border:"1px solid var(--border)", borderRadius:10 }}>
+                <div style={{ fontSize:10, letterSpacing:"0.1em", textTransform:"uppercase", color:"var(--fg-dim)" }}>{k}</div>
+                <div style={{ fontSize:18, fontWeight:500, fontFamily:"var(--mono)", marginTop:2, fontVariantNumeric:"tabular-nums" }}>{v}</div>
+                <div style={{ fontSize:11, color:"var(--fg-dim)", marginTop:1 }}>{sub}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── tweaks panel ─────────────────────────────────────────────
+function TweaksPanel({ theme, setTheme }) {
+  const [open, setOpen] = useState(true);
+  const ref = useRef(null);
+  const off = useRef({ x:16, y:16 });
+
+  const clamp = useCallback(() => {
+    const p = ref.current; if (!p) return;
+    const maxX = Math.max(16, window.innerWidth - p.offsetWidth - 16);
+    const maxY = Math.max(16, window.innerHeight - p.offsetHeight - 16);
+    off.current = { x: Math.min(maxX, Math.max(16, off.current.x)), y: Math.min(maxY, Math.max(16, off.current.y)) };
+    p.style.right = off.current.x + "px";
+    p.style.bottom = off.current.y + "px";
+  }, []);
+
+  const onDrag = (e) => {
+    const p = ref.current; if (!p) return;
+    const r = p.getBoundingClientRect();
+    const sx = e.clientX, sy = e.clientY;
+    const sr = window.innerWidth - r.right, sb = window.innerHeight - r.bottom;
+    const move = ev => { off.current = { x: sr-(ev.clientX-sx), y: sb-(ev.clientY-sy) }; clamp(); };
+    const up = () => { window.removeEventListener("mousemove",move); window.removeEventListener("mouseup",up); };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  };
+
+  const opts = [
+    { v:"pure-black", l:"Puro" },
+    { v:"dark-gray",  l:"Escuro" },
+    { v:"near-black", l:"Quase preto" },
+  ];
+  const idx = opts.findIndex(o => o.v === theme);
+
+  if (!open) return null;
+  return (
+    <div ref={ref} className="twk-panel" style={{ right:16, bottom:16 }}>
+      <div className="twk-hd" onMouseDown={onDrag}>
+        <b>Tweaks</b>
+        <button className="twk-x" onClick={() => setOpen(false)}>✕</button>
+      </div>
+      <div className="twk-body">
+        <div className="twk-sect">Tema</div>
+        <div className="twk-lbl">Background</div>
+        <div className="twk-seg" style={{ position:"relative" }}>
+          <div className="twk-seg-thumb" style={{
+            left: `calc(2px + ${idx} * (100% - 4px) / 3)`,
+            width: "calc((100% - 4px) / 3)"
+          }}/>
+          {opts.map(o => (
+            <button key={o.v} type="button" onClick={() => setTheme(o.v)}
+                    style={{ flex:1, appearance:"none", border:0, background:"transparent", cursor:"pointer",
+                             position:"relative", zIndex:1, padding:"4px 6px", fontWeight:500 }}>
+              {o.l}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── app root ─────────────────────────────────────────────────
+function App() {
+  const [screen, setScreen] = useState("main");
+  const [theme,  setTheme]  = useState("pure-black");
+  const [state,  setState]  = useState({
+    autoOn: true, comfortMode: "AUTO",
+    setpoint: 24.0, cabinTemp: 27.3, outsideTemp: 31.0,
+    acOn: true, ventL: 2, ventR: 2,
   });
+
+  useEffect(() => {
+    const stage = document.querySelector(".stage");
+    if (stage) stage.setAttribute("data-theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    const fit = () => {
+      const s = document.querySelector(".stage");
+      if (!s) return;
+      const sc = Math.min(window.innerWidth / 1792, window.innerHeight / 660);
+      s.style.transform = `scale(${sc})`;
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, []);
+
+  const onNav = s => setScreen(s);
+
+  let body;
+  if      (screen === "main")    body = <MainScreen    state={state} setState={setState} onNav={onNav}/>;
+  else if (screen === "hvac")    body = <HvacScreen    onNav={onNav}/>;
+  else if (screen === "seat")    body = <SeatScreen    onNav={onNav} ventL={state.ventL} ventR={state.ventR}/>;
+  else if (screen === "display") body = <DisplayScreen onNav={onNav}/>;
+
+  return <>
+    <div>{body}</div>
+    <TweaksPanel theme={theme} setTheme={setTheme}/>
+  </>;
 }
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 </body>
 </html>
