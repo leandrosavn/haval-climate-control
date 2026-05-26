@@ -272,7 +272,7 @@ fun MainControlScreen(
             ) {
                 if (isDownloading) {
                     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Baixando $latestVersion… ${(downloadProgress * 100).toInt()}%", fontSize = 13.sp)
+                        Text("Baixando $latestVersion… ${(downloadProgress * 100).toInt()}%", fontSize = 16.sp)
                         Spacer(Modifier.height(6.dp))
                         LinearProgressIndicator(
                             progress = { downloadProgress },
@@ -283,7 +283,7 @@ fun MainControlScreen(
                 } else {
                     Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Atualizar para $latestVersion", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Atualizar para $latestVersion", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -405,7 +405,7 @@ private fun HmiHeader(
                     .border(1.dp, HmiBorderStr, RoundedCornerShape(6.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Text("H", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = HmiFg)
+                Text("H", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = HmiFg)
             }
             Text(
                 "HAVAL · CLIMATE CONTROL",
@@ -642,8 +642,8 @@ private fun AutoMasterCard(
                 modifier              = Modifier.fillMaxWidth().padding(top = 14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("modo  AUTO", fontSize = 10.sp, color = HmiFgFaint, fontFamily = FontFamily.Monospace)
-                Text("HVAC · 16 props", fontSize = 10.sp, color = HmiFgFaint, fontFamily = FontFamily.Monospace)
+                Text("modo  AUTO", fontSize = 16.sp, color = HmiFgFaint, fontFamily = FontFamily.Monospace)
+                Text("HVAC · 16 props", fontSize = 16.sp, color = HmiFgFaint, fontFamily = FontFamily.Monospace)
             }
         }
     }
@@ -703,7 +703,7 @@ private fun CarVisualizationCard(
                     )
                     Text(
                         "°C",
-                        fontSize  = 16.sp,
+                        fontSize  = 19.sp,
                         color     = HmiFgMuted,
                         modifier  = Modifier.padding(bottom = 4.dp)
                     )
@@ -995,13 +995,13 @@ private fun TempReadCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment     = Alignment.CenterVertically
             ) {
-                Text(note, fontSize = 11.sp, color = HmiFgDim, fontFamily = FontFamily.Monospace)
+                Text(note, fontSize = 17.sp, color = HmiFgDim, fontFamily = FontFamily.Monospace)
                 Box(
                     modifier = Modifier
                         .border(1.dp, HmiBorderStr, RoundedCornerShape(999.dp))
                         .padding(horizontal = 8.dp, vertical = 3.dp)
                 ) {
-                    Text(delta, fontSize = 11.sp, color = HmiFgMuted, fontFamily = FontFamily.Monospace)
+                    Text(delta, fontSize = 17.sp, color = HmiFgMuted, fontFamily = FontFamily.Monospace)
                 }
             }
         }
@@ -1051,7 +1051,7 @@ private fun HmiInfoStripRow(
                     )
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("ESTADO DO AC", fontSize = 10.sp, color = HmiFgDim, letterSpacing = 2.sp, fontWeight = FontWeight.SemiBold)
+                    Text("ESTADO DO AC", fontSize = 16.sp, color = HmiFgDim, letterSpacing = 2.sp, fontWeight = FontWeight.SemiBold)
                     Row(
                         verticalAlignment     = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1081,7 +1081,7 @@ private fun HmiInfoStripRow(
         val curveLabel = mapOf("0" to "SUAVE", "1" to "NORMAL", "2" to "FORTE")
         HmiInfoCardBox(modifier = Modifier.weight(1f).clickable(onClick = onCycleComfort)) {
             Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-                Text("MODO CONFORTO", fontSize = 10.sp, color = HmiFgDim, letterSpacing = 2.sp, fontWeight = FontWeight.SemiBold)
+                Text("MODO CONFORTO", fontSize = 16.sp, color = HmiFgDim, letterSpacing = 2.sp, fontWeight = FontWeight.SemiBold)
                 Row(
                     modifier              = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -1105,7 +1105,7 @@ private fun HmiInfoStripRow(
                         ) {
                             Text(
                                 mode,
-                                fontSize      = 9.5.sp,
+                                fontSize      = 13.sp,
                                 fontWeight    = FontWeight.SemiBold,
                                 fontFamily    = FontFamily.Monospace,
                                 color         = if (isActive) HmiAccent else HmiFgFaint,
@@ -1117,7 +1117,7 @@ private fun HmiInfoStripRow(
                 if (resolvedCurve != null) {
                     Text(
                         "→ ${curveLabel[resolvedCurve]} · ${state.outsideTemp}°C ext.",
-                        fontSize      = 9.sp,
+                        fontSize      = 12.sp,
                         color         = HmiFgDim,
                         fontFamily    = FontFamily.Monospace
                     )
@@ -1223,7 +1223,7 @@ private fun VentInfoCard(
                         )
                         Text(
                             if (autoEnabled) "AUTO" else "OFF",
-                            fontSize      = 9.sp,
+                            fontSize      = 12.sp,
                             fontWeight    = FontWeight.SemiBold,
                             fontFamily    = FontFamily.Monospace,
                             color         = if (autoEnabled) HmiAccent else HmiFgDim,
@@ -1405,7 +1405,7 @@ fun DebugScreen(onNavigateBack: () -> Unit) {
                 }
                 Column {
                     Text("Debug", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = HmiFg)
-                    Text("v$currentVersion", fontSize = 11.sp, color = Color(0xFF666666))
+                    Text("v$currentVersion", fontSize = 17.sp, color = Color(0xFF666666))
                 }
             }
             Row(
@@ -1422,11 +1422,11 @@ fun DebugScreen(onNavigateBack: () -> Unit) {
                     if (isChecking) {
                         CircularProgressIndicator(modifier = Modifier.size(14.dp), color = HmiFg, strokeWidth = 2.dp)
                         Spacer(Modifier.width(6.dp))
-                        Text("Verificando...", fontSize = 12.sp)
+                        Text("Verificando...", fontSize = 15.sp)
                     } else {
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Atualizar", fontSize = 12.sp)
+                        Text("Atualizar", fontSize = 15.sp)
                     }
                 }
                 StatusDot(connected = state.vehicleConnected)
@@ -1446,7 +1446,7 @@ fun DebugScreen(onNavigateBack: () -> Unit) {
 
         Spacer(Modifier.height(12.dp))
 
-        Text("Controles HVAC", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFAAAAAA))
+        Text("Controles HVAC", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFAAAAAA))
         Spacer(Modifier.height(6.dp))
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -1462,7 +1462,7 @@ fun DebugScreen(onNavigateBack: () -> Unit) {
 
         Spacer(Modifier.height(10.dp))
 
-        Text("Controles EV", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFAAAAAA))
+        Text("Controles EV", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFAAAAAA))
         Spacer(Modifier.height(6.dp))
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -1473,7 +1473,7 @@ fun DebugScreen(onNavigateBack: () -> Unit) {
 
         Spacer(Modifier.height(10.dp))
 
-        Text("Sensores HVAC", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFAAAAAA))
+        Text("Sensores HVAC", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFAAAAAA))
         Spacer(Modifier.height(6.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             HvacReadOnly(Modifier.weight(1f), "front_temp_range",  state.frontTempRange)
@@ -1484,7 +1484,7 @@ fun DebugScreen(onNavigateBack: () -> Unit) {
 
         Spacer(Modifier.height(10.dp))
 
-        Text("Histórico de Ações", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFAAAAAA))
+        Text("Histórico de Ações", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFAAAAAA))
         Spacer(Modifier.height(6.dp))
 
         if (state.actionLog.isEmpty()) {
@@ -1511,7 +1511,7 @@ fun DebugScreen(onNavigateBack: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(state.actionLog.toList()) { entry ->
-                    Text(entry, fontSize = 12.sp, color = Color(0xFFCCCCCC), fontFamily = FontFamily.Monospace)
+                    Text(entry, fontSize = 15.sp, color = Color(0xFFCCCCCC), fontFamily = FontFamily.Monospace)
                     HorizontalDivider(color = Color(0xFF2A2A2A), thickness = 0.5.dp)
                 }
             }
@@ -1538,7 +1538,7 @@ fun DebugScreen(onNavigateBack: () -> Unit) {
                     Text("Nova versão disponível: $latestVersion\nVersão atual: $currentVersion")
                     if (isDownloading) {
                         Spacer(Modifier.height(4.dp))
-                        Text("Baixando… ${(downloadProgress * 100).toInt()}%", fontSize = 13.sp, color = Color(0xFF4FC3F7))
+                        Text("Baixando… ${(downloadProgress * 100).toInt()}%", fontSize = 16.sp, color = Color(0xFF4FC3F7))
                         LinearProgressIndicator(progress = { downloadProgress }, modifier = Modifier.fillMaxWidth(), color = Color(0xFF4FC3F7))
                     }
                 }
@@ -1618,7 +1618,7 @@ fun AssentoScreen(onNavigateBack: () -> Unit) {
                 }
                 Column {
                     Text("Assento", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = HmiFg)
-                    Text("Monitoramento de memória de assento", fontSize = 11.sp, color = Color(0xFF666666))
+                    Text("Monitoramento de memória de assento", fontSize = 17.sp, color = Color(0xFF666666))
                 }
             }
             StatusDot(connected = state.vehicleConnected)
@@ -1639,7 +1639,7 @@ fun AssentoScreen(onNavigateBack: () -> Unit) {
 
         Spacer(Modifier.height(6.dp))
 
-        Text("Histórico de Ações", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFAAAAAA))
+        Text("Histórico de Ações", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFAAAAAA))
         Spacer(Modifier.height(6.dp))
 
         if (state.seatActionLog.isEmpty()) {
@@ -1664,7 +1664,7 @@ fun AssentoScreen(onNavigateBack: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(state.seatActionLog.toList()) { entry ->
-                    Text(entry, fontSize = 12.sp, color = Color(0xFFCCCCCC), fontFamily = FontFamily.Monospace)
+                    Text(entry, fontSize = 15.sp, color = Color(0xFFCCCCCC), fontFamily = FontFamily.Monospace)
                     HorizontalDivider(color = Color(0xFF2A2A2A), thickness = 0.5.dp)
                 }
             }
@@ -1704,7 +1704,7 @@ fun SeatPropCard(
                 verticalAlignment     = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(label, fontSize = 11.sp, color = Color(0xFF888888), fontFamily = FontFamily.Monospace)
+                    Text(label, fontSize = 17.sp, color = Color(0xFF888888), fontFamily = FontFamily.Monospace)
                     Spacer(Modifier.height(4.dp))
                     Text(
                         if (isUnknown) "--" else if (isBoolean) if (isOn) "ON (1)" else "OFF (0)" else value,
@@ -1714,7 +1714,7 @@ fun SeatPropCard(
                     )
                 }
                 if (sendValues == null) {
-                    Text("somente leitura", fontSize = 10.sp, color = Color(0xFF444444))
+                    Text("somente leitura", fontSize = 16.sp, color = Color(0xFF444444))
                 }
             }
 
@@ -1762,7 +1762,7 @@ fun SeatValueCard(modifier: Modifier = Modifier, label: String, value: String) {
             modifier            = Modifier.padding(14.dp).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(label, fontSize = 10.sp, color = Color(0xFF888888), textAlign = TextAlign.Center, fontFamily = FontFamily.Monospace)
+            Text(label, fontSize = 16.sp, color = Color(0xFF888888), textAlign = TextAlign.Center, fontFamily = FontFamily.Monospace)
             Spacer(Modifier.height(8.dp))
             Text(
                 text       = value,
@@ -1834,7 +1834,7 @@ fun ScreenInfoScreen(onNavigateBack: () -> Unit) {
                 }
                 Column {
                     Text("Info da Tela", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = HmiFg)
-                    Text("Métricas do display", fontSize = 11.sp, color = Color(0xFF666666))
+                    Text("Métricas do display", fontSize = 17.sp, color = Color(0xFF666666))
                 }
             }
         }
@@ -1853,8 +1853,8 @@ fun ScreenInfoScreen(onNavigateBack: () -> Unit) {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment     = Alignment.CenterVertically
                     ) {
-                        Text(row.label, fontSize = 13.sp, color = Color(0xFF888888))
-                        Text(row.value, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF64B5F6), fontFamily = FontFamily.Monospace)
+                        Text(row.label, fontSize = 16.sp, color = Color(0xFF888888))
+                        Text(row.value, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF64B5F6), fontFamily = FontFamily.Monospace)
                     }
                     if (row != rows.last()) {
                         HorizontalDivider(color = Color(0xFF2A2A2A), thickness = 0.5.dp)
@@ -1886,7 +1886,7 @@ fun InfoCard(
             modifier            = Modifier.padding(14.dp).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(label, fontSize = 11.sp, color = Color(0xFF888888), textAlign = TextAlign.Center)
+            Text(label, fontSize = 17.sp, color = Color(0xFF888888), textAlign = TextAlign.Center)
             Spacer(Modifier.height(6.dp))
             Text(value, fontSize = valueFontSize.sp, fontWeight = FontWeight.Bold, color = valueColor, textAlign = TextAlign.Center)
         }
@@ -1918,7 +1918,7 @@ fun HvacToggle(label: String, value: String, propKey: String) {
         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(label, fontSize = 10.sp, color = Color(0xFFAAAAAA), textAlign = TextAlign.Center)
+            Text(label, fontSize = 16.sp, color = Color(0xFFAAAAAA), textAlign = TextAlign.Center)
             Text(
                 text       = when (value) { "1" -> "ON"; "0" -> "OFF"; else -> "--" },
                 fontSize   = 14.sp,
@@ -1937,9 +1937,9 @@ fun HvacReadOnly(modifier: Modifier = Modifier, label: String, value: String) {
         shape    = RoundedCornerShape(8.dp)
     ) {
         Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(label, fontSize = 10.sp, color = Color(0xFF888888), textAlign = TextAlign.Center)
+            Text(label, fontSize = 16.sp, color = Color(0xFF888888), textAlign = TextAlign.Center)
             Spacer(Modifier.height(4.dp))
-            Text(value, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = HmiFg, textAlign = TextAlign.Center)
+            Text(value, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = HmiFg, textAlign = TextAlign.Center)
         }
     }
 }
@@ -1952,7 +1952,7 @@ fun TempCard(modifier: Modifier = Modifier, label: String, value: String, color:
         shape    = RoundedCornerShape(12.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(label, fontSize = 11.sp, color = Color(0xFF888888), textAlign = TextAlign.Center)
+            Text(label, fontSize = 17.sp, color = Color(0xFF888888), textAlign = TextAlign.Center)
             Spacer(Modifier.height(6.dp))
             Text(value, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = color)
         }
@@ -1967,7 +1967,7 @@ fun StatusCard(modifier: Modifier = Modifier, label: String, value: String, colo
         shape    = RoundedCornerShape(12.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(label, fontSize = 11.sp, color = Color(0xFF888888), textAlign = TextAlign.Center)
+            Text(label, fontSize = 17.sp, color = Color(0xFF888888), textAlign = TextAlign.Center)
             Spacer(Modifier.height(6.dp))
             Text(value, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = color)
         }
@@ -1988,7 +1988,7 @@ fun StatusDot(connected: Boolean) {
         )
         Text(
             text     = if (connected) "Conectado" else "Aguardando",
-            fontSize = 12.sp,
+            fontSize = 15.sp,
             color    = if (connected) Color(0xFF4CAF50) else Color(0xFF757575)
         )
     }
