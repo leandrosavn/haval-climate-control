@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - preview
+  workflow_dispatch:
 
 jobs:
   build:
