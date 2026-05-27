@@ -161,6 +161,18 @@ fun MainControlScreen(
         state.autoControlEnabled    = autoControlEnabled
         state.seatVentAutoEnabled   = seatVentAutoEnabled
         state.comfortMode           = comfortMode
+
+        // Quando o serviço detecta alteração externa na ventilação, desativa AUTO e persiste
+        state.onExternalVentChange = { _ ->
+            seatVentAutoEnabled = false
+            prefs.edit().putBoolean(KEY_SEAT_VENT_AUTO, false).apply()
+        }
+        // Quando o serviço detecta alteração externa na curva de conforto, muda para modo manual e persiste
+        state.onExternalComfortChange = { newMode ->
+            comfortMode = newMode
+            prefs.edit().putString(KEY_COMFORT_MODE, newMode).apply()
+        }
+
         try {
             currentVersion = context.packageManager
                 .getPackageInfo(context.packageName, 0).versionName ?: "--"

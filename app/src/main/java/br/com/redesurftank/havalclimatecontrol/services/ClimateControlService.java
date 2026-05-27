@@ -138,6 +138,13 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
     private Runnable resumeHvacRunnable = null;
     private final Runnable acOffCheckRunnable = this::evaluateClimateControl;
 
+    // Rastreamento do último valor enviado pelo app — usado para detectar alterações externas
+    private volatile String  lastSentDriverVent    = null;
+    private volatile String  lastSentPassengerVent = null;
+    private volatile boolean prevSeatVentAuto      = false;
+    private volatile String  lastSentComfortCurve  = null;
+    private volatile String  prevComfortMode       = null;
+
     private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
 
     private final IListener vehicleDataListener = new IListener.Stub() {
@@ -450,66 +457,111 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
 
                     String currentCurve = dataCache.get(PROP_COMFORT_CURVE);
                     String cMode = ClimateStateHolder.INSTANCE.getComfortMode();
-                    String desiredCurve;
-                    switch (cMode) {
-                        case "SUAVE":  desiredCurve = "0"; break;
-                        case "NORMAL": desiredCurve = "1"; break;
-                        case "FORTE":  desiredCurve = "2"; break;
-                        default: {
-                            float oTemp = 0f;
-                            String oStr = dataCache.get(PROP_OUTSIDE_TEMP);
-                            if (oStr != null) {
-                                try { oTemp = Float.parseFloat(oStr); } catch (NumberFormatException ignored) {}
-                            }
-                            if (oTemp >= 24f)      desiredCurve = "2";
-                            else if (oTemp >= 19f) desiredCurve = "1";
-                            else                   desiredCurve = "0";
-                            break;
-                        }
+
+                    // Se o modo foi alterado pelo app, reinicia rastreamento para evitar falsos positivos
+                    if (!cMode.equals(prevComfortMode)) {
+                        lastSentComfortCurve = null;
+                        prevComfortMode = cMode;
                     }
-                    if (!desiredCurve.equals(currentCurve)) {
+
+                    // Se a curva foi alterada externamente (menu nativo do HVAC), converte para modo manual
+                    boolean externalComfortChange =
+                            lastSentComfortCurve != null && !lastSentComfortCurve.equals(currentCurve);
+
+                    if (externalComfortChange) {
                         String msg = String.format(Locale.getDefault(),
-                                "Comfort curve → %s — interna %.1f°C", desiredCurve, insideTemp);
+                                "Curva de conforto alterada externamente (%s) → modo manual", currentCurve);
                         Log.w(TAG, msg);
-                        sendHvacCommand(PROP_COMFORT_CURVE, desiredCurve);
-                        dataCache.put(PROP_COMFORT_CURVE, desiredCurve);
                         if (logEntry == null) logEntry = timeFormat.format(new Date()) + "  " + msg;
+                        final String finalCurve = currentCurve != null ? currentCurve : "1";
+                        mainHandler.post(() -> ClimateStateHolder.INSTANCE.notifyExternalComfortChange(finalCurve));
+                        // Não sobrescreve o valor externo — continua para pushState
+                    } else {
+                        String desiredCurve;
+                        switch (cMode) {
+                            case "SUAVE":  desiredCurve = "0"; break;
+                            case "NORMAL": desiredCurve = "1"; break;
+                            case "FORTE":  desiredCurve = "2"; break;
+                            default: {
+                                float oTemp = 0f;
+                                String oStr = dataCache.get(PROP_OUTSIDE_TEMP);
+                                if (oStr != null) {
+                                    try { oTemp = Float.parseFloat(oStr); } catch (NumberFormatException ignored) {}
+                                }
+                                if (oTemp >= 24f)      desiredCurve = "2";
+                                else if (oTemp >= 19f) desiredCurve = "1";
+                                else                   desiredCurve = "0";
+                                break;
+                            }
+                        }
+                        if (!desiredCurve.equals(currentCurve)) {
+                            String msg = String.format(Locale.getDefault(),
+                                    "Comfort curve → %s — interna %.1f°C", desiredCurve, insideTemp);
+                            Log.w(TAG, msg);
+                            lastSentComfortCurve = desiredCurve;
+                            sendHvacCommand(PROP_COMFORT_CURVE, desiredCurve);
+                            dataCache.put(PROP_COMFORT_CURVE, desiredCurve);
+                            if (logEntry == null) logEntry = timeFormat.format(new Date()) + "  " + msg;
+                        }
                     }
                 }
             }
 
             // Bloco B — Ventilação dos bancos (independente do modo auto do HVAC)
-            if (ClimateStateHolder.INSTANCE.getSeatVentAutoEnabled()) {
-                String desiredVentLevel;
-                if (insideTemp > 28f) {
-                    desiredVentLevel = "3";
-                } else if (insideTemp > 26f) {
-                    desiredVentLevel = "2";
-                } else if (insideTemp > 24f) {
-                    desiredVentLevel = "1";
-                } else {
-                    desiredVentLevel = "0";
-                }
-
+            boolean seatVentAutoNow = ClimateStateHolder.INSTANCE.getSeatVentAutoEnabled();
+            if (seatVentAutoNow) {
                 String currentDriverVent    = dataCache.get(PROP_DRIVER_SEAT_VENT);
                 String currentPassengerVent = dataCache.get(PROP_PASSENGER_SEAT_VENT);
-                boolean ventChanged = !desiredVentLevel.equals(currentDriverVent)
-                        || !desiredVentLevel.equals(currentPassengerVent);
 
-                if (!desiredVentLevel.equals(currentDriverVent)) {
-                    sendHvacCommand(PROP_DRIVER_SEAT_VENT, desiredVentLevel);
-                    dataCache.put(PROP_DRIVER_SEAT_VENT, desiredVentLevel);
+                // Ao (re)ativar o modo AUTO, reinicia rastreamento para evitar falsos positivos
+                if (!prevSeatVentAuto) {
+                    lastSentDriverVent    = null;
+                    lastSentPassengerVent = null;
                 }
-                if (!desiredVentLevel.equals(currentPassengerVent)) {
-                    sendHvacCommand(PROP_PASSENGER_SEAT_VENT, desiredVentLevel);
-                    dataCache.put(PROP_PASSENGER_SEAT_VENT, desiredVentLevel);
-                }
-                if (ventChanged && logEntry == null) {
+                prevSeatVentAuto = true;
+
+                // Se a ventilação foi alterada externamente (menu nativo), desativa o modo AUTO
+                boolean externalVentChange =
+                        (lastSentDriverVent    != null && !lastSentDriverVent.equals(currentDriverVent))
+                     || (lastSentPassengerVent != null && !lastSentPassengerVent.equals(currentPassengerVent));
+
+                if (externalVentChange) {
                     String msg = String.format(Locale.getDefault(),
-                            "Ventilação bancos → %s — interna %.1f°C", desiredVentLevel, insideTemp);
+                            "Ventilação alterada externamente (driver=%s) → modo AUTO desativado", currentDriverVent);
                     Log.w(TAG, msg);
-                    logEntry = timeFormat.format(new Date()) + "  " + msg;
+                    if (logEntry == null) logEntry = timeFormat.format(new Date()) + "  " + msg;
+                    final String finalLevel = currentDriverVent != null ? currentDriverVent : "0";
+                    mainHandler.post(() -> ClimateStateHolder.INSTANCE.notifyExternalVentChange(finalLevel));
+                    // Não sobrescreve o valor externo — continua para pushState
+                } else {
+                    String desiredVentLevel;
+                    if (insideTemp > 28f)      desiredVentLevel = "3";
+                    else if (insideTemp > 26f) desiredVentLevel = "2";
+                    else if (insideTemp > 24f) desiredVentLevel = "1";
+                    else                       desiredVentLevel = "0";
+
+                    boolean ventChanged = !desiredVentLevel.equals(currentDriverVent)
+                            || !desiredVentLevel.equals(currentPassengerVent);
+
+                    if (!desiredVentLevel.equals(currentDriverVent)) {
+                        lastSentDriverVent = desiredVentLevel;
+                        sendHvacCommand(PROP_DRIVER_SEAT_VENT, desiredVentLevel);
+                        dataCache.put(PROP_DRIVER_SEAT_VENT, desiredVentLevel);
+                    }
+                    if (!desiredVentLevel.equals(currentPassengerVent)) {
+                        lastSentPassengerVent = desiredVentLevel;
+                        sendHvacCommand(PROP_PASSENGER_SEAT_VENT, desiredVentLevel);
+                        dataCache.put(PROP_PASSENGER_SEAT_VENT, desiredVentLevel);
+                    }
+                    if (ventChanged && logEntry == null) {
+                        String msg = String.format(Locale.getDefault(),
+                                "Ventilação bancos → %s — interna %.1f°C", desiredVentLevel, insideTemp);
+                        Log.w(TAG, msg);
+                        logEntry = timeFormat.format(new Date()) + "  " + msg;
+                    }
                 }
+            } else {
+                prevSeatVentAuto = false;
             }
 
             // Bloco C — Aquecimento por temperatura externa

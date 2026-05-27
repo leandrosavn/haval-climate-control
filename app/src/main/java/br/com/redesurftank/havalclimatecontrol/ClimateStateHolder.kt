@@ -43,6 +43,30 @@ object ClimateStateHolder {
     var seatVentAutoEnabled    by mutableStateOf(true)
     var comfortMode            by mutableStateOf("AUTO")
 
+    // Callbacks invocados pelo serviço (via mainHandler) quando uma mudança externa é detectada
+    @Volatile var onExternalVentChange:    ((String) -> Unit)? = null
+    @Volatile var onExternalComfortChange: ((String) -> Unit)? = null
+
+    /** Chamado pelo serviço quando a ventilação do banco é alterada externamente.
+     *  Desativa o modo AUTO e notifica a UI para persistir a mudança. */
+    fun notifyExternalVentChange(newLevel: String) {
+        seatVentAutoEnabled = false
+        onExternalVentChange?.invoke(newLevel)
+    }
+
+    /** Chamado pelo serviço quando a curva de conforto é alterada externamente.
+     *  Converte o valor numérico ("0"/"1"/"2") para o modo textual e notifica a UI. */
+    fun notifyExternalComfortChange(curve: String) {
+        val newMode = when (curve) {
+            "0"  -> "SUAVE"
+            "1"  -> "NORMAL"
+            "2"  -> "FORTE"
+            else -> return   // valor desconhecido, ignora
+        }
+        comfortMode = newMode
+        onExternalComfortChange?.invoke(newMode)
+    }
+
     fun interface CommandCallback {
         fun onCommand(key: String, value: String)
     }
