@@ -396,7 +396,7 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
                 carStartTimestamp    = System.currentTimeMillis();
                 Log.w(TAG, "Partida do carro detectada — AC protegido por 30s");
                 String acEnableStr = dataCache.get(PROP_AC_ENABLE);
-                if (!"1".equals(acEnableStr)) {
+                if (!"1".equals(acEnableStr) && "1".equals(dataCache.get(PROP_AUTO_ENABLE))) {
                     sendHvacCommand(PROP_AC_ENABLE, "1");
                     dataCache.put(PROP_AC_ENABLE, "1");
                     acOffTimestamp = 0;
