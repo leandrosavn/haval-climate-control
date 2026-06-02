@@ -2,9 +2,8 @@ name: Build and Release
 
 on:
   push:
-    branches:
-      - master
-      - preview
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 jobs:
@@ -25,14 +24,29 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Get version from build.gradle.kts
+      - name: Resolve version
         id: get_version
         run: |
-          VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
-          BUILD_NUMBER=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts)
+          # Em build por tag, a tag manda; no dispatch manual cai pro build.gradle.kts
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+            VERSION="${TAG#v}"
+          else
+            VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+            TAG="v$VERSION"
+          fi
+          echo "TAG=$TAG"         >> $GITHUB_OUTPUT
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_OUTPUT
-          echo "Detected version: $VERSION (versionCode: $BUILD_NUMBER)"
+          echo "Building $TAG (version $VERSION)"
+
+      - name: Check tag matches versionName
+        if: github.ref_type == 'tag'
+        run: |
+          GRADLE_VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          if [ "$GRADLE_VERSION" != "${{ steps.get_version.outputs.VERSION }}" ]; then
+            echo "::error::Tag ${{ steps.get_version.outputs.TAG }} nao bate com versionName=$GRADLE_VERSION no build.gradle.kts"
+            exit 1
+          fi
 
       - name: Decode keystore
         run: |
@@ -47,18 +61,11 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease
 
-      - name: Create git tag and GitHub Release
+      - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="v${{ steps.get_version.outputs.VERSION }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Create local tag (ignore error if it already exists)
-          git tag "$TAG" 2>/dev/null || echo "Tag $TAG already exists locally"
-          # Push tag to GitHub (ignore error if already pushed)
-          git push origin "$TAG" 2>/dev/null || echo "Tag $TAG already pushed"
-          # Create release, or just upload the APK if the release already exists
+          TAG="${{ steps.get_version.outputs.TAG }}"
           gh release create "$TAG" \
             --title "haval-climate-control-${{ steps.get_version.outputs.VERSION }}" \
             --generate-notes \

@@ -133,6 +133,7 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
     private long    acOffTimestamp        = 0;    // epoch ms do último desligamento do AC pelo controle automático
     private long    carStartTimestamp     = 0;    // epoch ms da última partida do carro detectada
     private boolean insideTempWasOffline  = true; // true enquanto o sensor estava offline (carro desligado)
+    private boolean acControlArmed        = false; // controle só atua quando o AC está ligado (já na partida ou ligado depois)
 
     private boolean  isHvacSuspended    = false;
     private Runnable resumeHvacRunnable = null;
@@ -391,17 +392,28 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
             String logEntry = null;
 
             // Detectar partida do carro (transição offline → online)
+            // NÃO liga mais o AC automaticamente: o controle fica desarmado e só
+            // arma quando o AC estiver ligado — seja porque já veio ligado na
+            // partida, seja porque o usuário ligou depois.
             if (insideTempWasOffline) {
                 insideTempWasOffline = false;
                 carStartTimestamp    = System.currentTimeMillis();
-                Log.w(TAG, "Partida do carro detectada — AC protegido por 30s");
-                String acEnableStr = dataCache.get(PROP_AC_ENABLE);
-                if (!"1".equals(acEnableStr) && "1".equals(dataCache.get(PROP_AUTO_ENABLE))) {
-                    sendHvacCommand(PROP_AC_ENABLE, "1");
-                    dataCache.put(PROP_AC_ENABLE, "1");
-                    acOffTimestamp = 0;
-                    backgroundHandler.removeCallbacks(acOffCheckRunnable);
-                    logEntry = timeFormat.format(new Date()) + "  AC ligado — partida do carro (30s protegido)";
+                acControlArmed       = false;
+                Log.w(TAG, "Partida detectada — controle desarmado");
+            }
+
+            // Trava geral: enquanto o AC estiver desligado e o controle não tiver
+            // armado, o app não altera AC, ventilação nem aquecimento. Assim que o
+            // AC está ligado (na partida ou depois), arma e passa a controlar.
+            if (!acControlArmed) {
+                if ("1".equals(dataCache.get(PROP_AC_ENABLE))) {
+                    acControlArmed = true;
+                    Log.w(TAG, "AC ligado — controle ativado");
+                    logEntry = timeFormat.format(new Date()) + "  AC ligado — controle ativado";
+                } else {
+                    // Ainda desarmado: não toca em nada, apenas espelha o estado na UI.
+                    pushState(true, logEntry);
+                    return;
                 }
             }
 
