@@ -18,12 +18,20 @@ A interface é um **HMI automotivo** em tela cheia (1792 × 660 dp, proporção 
 
 Quando o sensor de temperatura interna sai do estado offline (`87 °C` = carro desligado) para uma leitura real:
 
-- **AC ligado automaticamente** ao detectar a partida.
+- O controle é **desarmado** na partida — o app **não liga o AC automaticamente**.
 - **Proteção de 30 segundos**: nos primeiros 30 s após a partida o AC não é desligado pelas regras abaixo, mesmo que a temperatura interna esteja abaixo do setpoint.
 
 ---
 
-### Bloco A — Controle do AC *(requer `car.hvac.auto_enable = 1`)*
+### Trava geral — controle "armado"
+
+Enquanto o AC estiver **desligado e o controle não estiver armado**, o app **não altera nada** (AC, curva de conforto ou aquecimento) — apenas espelha o estado na tela.
+
+O controle **arma** assim que o AC é ligado, seja porque já veio ligado na partida ou porque o usuário ligou depois. A partir daí, os blocos abaixo passam a atuar.
+
+---
+
+### Bloco A — Controle do AC *(requer controle armado + `car.hvac.auto_enable = 1`)*
 
 Gerencia o liga/desliga do compressor (`car.hvac.ac_enable`) com base na diferença entre temperatura interna e setpoint do motorista (`car.hvac.driver_temperature`).
 
@@ -49,38 +57,40 @@ Gerencia o liga/desliga do compressor (`car.hvac.ac_enable`) com base na diferen
 
 ---
 
-### Bloco A — Comfort Curve *(requer `car.hvac.auto_enable = 1`)*
+### Bloco A — Curva de conforto *(requer controle armado + `car.hvac.auto_enable = 1`)*
 
-Ajusta a curva de conforto do HVAC (`car.hvac.setting.comfort_curve`) conforme a temperatura interna:
+Ajusta a curva de conforto do HVAC (`car.hvac.setting.comfort_curve`) — que define a intensidade do fluxo de ar / agressividade com que o HVAC atinge a temperatura alvo — de acordo com o **modo de conforto** selecionado na tela:
 
-| Temperatura interna | Curva |
+| Modo | Curva enviada | Comportamento |
+|---|---|---|
+| **SUAVE** | `0` | fluxo suave, fixo |
+| **NORMAL** | `1` | fluxo intermediário, fixo |
+| **FORTE** | `2` | fluxo agressivo, fixo |
+| **AUTO** | varia | escolhida pela **temperatura externa** (ver abaixo) |
+
+No modo **AUTO**:
+
+| Temperatura externa | Curva |
 |---|---|
-| < 22 °C | `0` — mais conservadora |
-| 22 °C – 24 °C | `1` — intermediária |
-| > 24 °C | `2` — mais agressiva |
+| ≥ 24 °C | `2` — agressiva |
+| 19 °C – 24 °C | `1` — intermediária |
+| < 19 °C | `0` — suave |
+
+> O comportamento físico de cada curva (rotação do ventilador, distribuição de ar) é definido pelo firmware da GWM/Haval — o app apenas envia o valor `0/1/2`.
+
+**Detecção de alteração externa** — se a curva for mudada pelo menu nativo do HVAC, o app detecta e passa para **modo manual**, parando de sobrescrever o valor.
 
 ---
 
-### Bloco B — Ventilação dos bancos *(independente do modo auto do HVAC)*
+### Ventilação dos bancos — sempre manual
 
-Controla o nível de ventilação dos bancos do motorista e passageiro (`car.comfort_setting.driver_seat_ventilation_level` / `car.comfort_setting.passenger_seat_ventilation_level`) com base na temperatura interna:
+O app **nunca** altera a ventilação dos bancos (`car.comfort_setting.driver_seat_ventilation_level` / `car.comfort_setting.passenger_seat_ventilation_level`). Os cards na tela são **somente leitura**, exibindo o nível atual definido manualmente pelo usuário.
 
-| Temperatura interna | Nível |
-|---|---|
-| > 28 °C | `3` — máximo |
-| > 26 °C | `2` — alto |
-| > 24 °C | `1` — baixo |
-| ≤ 24 °C | `0` — desligado |
-
-**Toggle Automático / Desligado** — os cards de ventilação na tela são clicáveis:
-- **AUTO** (padrão): lógica acima ativa, nível exibido em tempo real.
-- **OFF**: lógica ignorada, bancos zerados imediatamente, UI exibe `--`.
-
-A última escolha é persistida em `SharedPreferences` e restaurada ao reabrir o app.
+> Em versões anteriores (≤ 1.10.4) havia um controle automático de ventilação dos bancos; ele foi **removido na v1.10.5**.
 
 ---
 
-### Bloco C — Aquecimento por temperatura externa *(independente do modo auto do HVAC)*
+### Bloco C — Aquecimento por temperatura externa *(requer controle armado; independente do `auto_enable`)*
 
 Controla o aquecimento (`car.hvac.heating_enable`) com base na temperatura externa:
 
@@ -95,8 +105,9 @@ O comando só é enviado quando o valor muda (comparação com cache local).
 
 ## Interface
 
-- **Tela principal** — layout HMI em 3 colunas: coluna esquerda (temperatura interna + status AC/aquecimento + fluxo de ar animado), coluna central (visualização top-down do carro + temperatura de setpoint + external), coluna direita (ventilação dos bancos + logs de ações).
+- **Tela principal** — layout HMI em 3 colunas: coluna esquerda (temperatura interna + status AC/aquecimento + fluxo de ar animado), coluna central (visualização top-down do carro + temperatura de setpoint + external), coluna direita (ventilação dos bancos — somente leitura — + logs de ações).
 - **Toggle de controle automático** — desativa/reativa todas as regras de uma vez.
+- **Seletor de modo de conforto** — alterna entre `AUTO`, `SUAVE`, `NORMAL` e `FORTE` (curva de conforto).
 - **Log de ações** — histórico em tempo real com timestamp dos últimos 50 eventos (HVAC e bancos em abas separadas).
 - **Auto-update** — verifica novas versões uma vez por dia via GitHub Releases API e oferece download direto na tela.
 
@@ -116,10 +127,10 @@ MainActivity (Compose HMI)
             ├── IIntelligentVehicleControlService → SDK Beantechs
             ├── vehicleDataListener → dispara evaluateClimateControl() a cada mudança
             └── evaluateClimateControl()
-                    ├── Detecção de partida
-                    ├── Bloco A — AC + Comfort Curve
-                    ├── Bloco B — Ventilação dos bancos
+                    ├── Detecção de partida + trava geral (armar controle)
+                    ├── Bloco A — AC + curva de conforto
                     └── Bloco C — Aquecimento
+                    (ventilação dos bancos é sempre manual — somente leitura)
 ```
 
 ---
@@ -134,11 +145,13 @@ MainActivity (Compose HMI)
 
 ## Build & Release
 
-O pipeline CI/CD roda no GitHub Actions a cada push para `master`:
+O pipeline CI/CD roda no GitHub Actions ao **publicar uma tag `v*`** (ou via `workflow_dispatch` manual):
 
 1. Lê `versionName` / `versionCode` do `app/build.gradle.kts`
 2. Assina o APK com keystore via secrets
-3. Publica GitHub Release com tag `v{versionName}`
+3. Publica GitHub Release com a tag `v{versionName}`
+
+> Fluxo típico: faça commit em `master`, incremente a versão no `app/build.gradle.kts`, então crie e envie a tag (`git tag v1.x.y && git push origin v1.x.y`) para disparar o build.
 
 O app verifica automaticamente a última release disponível e compara com a versão instalada para oferecer atualização.
 
