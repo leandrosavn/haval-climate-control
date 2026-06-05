@@ -140,9 +140,6 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
     private final Runnable acOffCheckRunnable = this::evaluateClimateControl;
 
     // Rastreamento do último valor enviado pelo app — usado para detectar alterações externas
-    private volatile String  lastSentDriverVent    = null;
-    private volatile String  lastSentPassengerVent = null;
-    private volatile boolean prevSeatVentAuto      = false;
     private volatile String  lastSentComfortCurve  = null;
     private volatile String  prevComfortMode       = null;
 
@@ -519,62 +516,8 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
                 }
             }
 
-            // Bloco B — Ventilação dos bancos (independente do modo auto do HVAC)
-            boolean seatVentAutoNow = ClimateStateHolder.INSTANCE.getSeatVentAutoEnabled();
-            if (seatVentAutoNow) {
-                String currentDriverVent    = dataCache.get(PROP_DRIVER_SEAT_VENT);
-                String currentPassengerVent = dataCache.get(PROP_PASSENGER_SEAT_VENT);
-
-                // Ao (re)ativar o modo AUTO, reinicia rastreamento para evitar falsos positivos
-                if (!prevSeatVentAuto) {
-                    lastSentDriverVent    = null;
-                    lastSentPassengerVent = null;
-                }
-                prevSeatVentAuto = true;
-
-                // Se a ventilação foi alterada externamente (menu nativo), desativa o modo AUTO
-                boolean externalVentChange =
-                        (lastSentDriverVent    != null && !lastSentDriverVent.equals(currentDriverVent))
-                     || (lastSentPassengerVent != null && !lastSentPassengerVent.equals(currentPassengerVent));
-
-                if (externalVentChange) {
-                    String msg = String.format(Locale.getDefault(),
-                            "Ventilação alterada externamente (driver=%s) → modo AUTO desativado", currentDriverVent);
-                    Log.w(TAG, msg);
-                    if (logEntry == null) logEntry = timeFormat.format(new Date()) + "  " + msg;
-                    final String finalLevel = currentDriverVent != null ? currentDriverVent : "0";
-                    mainHandler.post(() -> ClimateStateHolder.INSTANCE.notifyExternalVentChange(finalLevel));
-                    // Não sobrescreve o valor externo — continua para pushState
-                } else {
-                    String desiredVentLevel;
-                    if (insideTemp > 28f)      desiredVentLevel = "3";
-                    else if (insideTemp > 26f) desiredVentLevel = "2";
-                    else if (insideTemp > 24f) desiredVentLevel = "1";
-                    else                       desiredVentLevel = "0";
-
-                    boolean ventChanged = !desiredVentLevel.equals(currentDriverVent)
-                            || !desiredVentLevel.equals(currentPassengerVent);
-
-                    if (!desiredVentLevel.equals(currentDriverVent)) {
-                        lastSentDriverVent = desiredVentLevel;
-                        sendHvacCommand(PROP_DRIVER_SEAT_VENT, desiredVentLevel);
-                        dataCache.put(PROP_DRIVER_SEAT_VENT, desiredVentLevel);
-                    }
-                    if (!desiredVentLevel.equals(currentPassengerVent)) {
-                        lastSentPassengerVent = desiredVentLevel;
-                        sendHvacCommand(PROP_PASSENGER_SEAT_VENT, desiredVentLevel);
-                        dataCache.put(PROP_PASSENGER_SEAT_VENT, desiredVentLevel);
-                    }
-                    if (ventChanged && logEntry == null) {
-                        String msg = String.format(Locale.getDefault(),
-                                "Ventilação bancos → %s — interna %.1f°C", desiredVentLevel, insideTemp);
-                        Log.w(TAG, msg);
-                        logEntry = timeFormat.format(new Date()) + "  " + msg;
-                    }
-                }
-            } else {
-                prevSeatVentAuto = false;
-            }
+            // A ventilação dos bancos é sempre controlada manualmente pelo usuário.
+            // O app apenas lê/exibe os níveis atuais (em pushState) e nunca os altera.
 
             // Bloco C — Aquecimento por temperatura externa
             String outsideTempForHeating = dataCache.get(PROP_OUTSIDE_TEMP);

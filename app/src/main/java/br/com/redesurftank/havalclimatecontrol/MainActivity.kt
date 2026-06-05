@@ -64,7 +64,6 @@ private const val GITHUB_RELEASES_API =
 private const val UI_PREFS                 = "climate_ui_prefs"
 private const val KEY_AUTO_CONTROL         = "auto_control_enabled"
 private const val KEY_LAST_UPDATE_CHECK    = "last_update_check_ms"
-private const val KEY_SEAT_VENT_AUTO       = "seat_vent_auto_enabled"
 private const val KEY_COMFORT_MODE         = "comfort_mode"
 private const val UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L
 
@@ -145,9 +144,6 @@ fun MainControlScreen(
     var autoControlEnabled by remember {
         mutableStateOf(prefs.getBoolean(KEY_AUTO_CONTROL, true))
     }
-    var seatVentAutoEnabled by remember {
-        mutableStateOf(prefs.getBoolean(KEY_SEAT_VENT_AUTO, true))
-    }
     var comfortMode by remember {
         mutableStateOf(prefs.getString(KEY_COMFORT_MODE, "AUTO") ?: "AUTO")
     }
@@ -159,14 +155,8 @@ fun MainControlScreen(
 
     LaunchedEffect(Unit) {
         state.autoControlEnabled    = autoControlEnabled
-        state.seatVentAutoEnabled   = seatVentAutoEnabled
         state.comfortMode           = comfortMode
 
-        // Quando o serviço detecta alteração externa na ventilação, desativa AUTO e persiste
-        state.onExternalVentChange = { _ ->
-            seatVentAutoEnabled = false
-            prefs.edit().putBoolean(KEY_SEAT_VENT_AUTO, false).apply()
-        }
         // Quando o serviço detecta alteração externa na curva de conforto, muda para modo manual e persiste
         state.onExternalComfortChange = { newMode ->
             comfortMode = newMode
@@ -337,17 +327,6 @@ fun MainControlScreen(
                 comfortMode       = next
                 state.comfortMode = next
                 prefs.edit().putString(KEY_COMFORT_MODE, next).apply()
-            },
-            seatVentAutoEnabled = seatVentAutoEnabled,
-            onToggleSeatVent    = {
-                val next = !seatVentAutoEnabled
-                seatVentAutoEnabled       = next
-                state.seatVentAutoEnabled = next
-                prefs.edit().putBoolean(KEY_SEAT_VENT_AUTO, next).apply()
-                if (!next) {
-                    state.sendCommand("car.comfort_setting.driver_seat_ventilation_level",    "0")
-                    state.sendCommand("car.comfort_setting.passenger_seat_ventilation_level", "0")
-                }
             }
         )
     }
@@ -1024,9 +1003,7 @@ private fun TempReadCard(
 private fun HmiInfoStripRow(
     state: ClimateStateHolder,
     comfortMode: String,
-    onCycleComfort: () -> Unit,
-    seatVentAutoEnabled: Boolean,
-    onToggleSeatVent: () -> Unit
+    onCycleComfort: () -> Unit
 ) {
     val isAcOn = state.acEnable == "1"
 
@@ -1137,22 +1114,18 @@ private fun HmiInfoStripRow(
             }
         }
 
-        // 3. Ventilação Motorista
+        // 3. Ventilação Motorista (somente leitura — ajuste sempre manual)
         VentInfoCard(
             modifier    = Modifier.weight(1f),
             label       = "VENTILAÇÃO MOTORISTA",
-            level       = state.driverSeatVentLevel,
-            autoEnabled = seatVentAutoEnabled,
-            onToggle    = onToggleSeatVent
+            level       = state.driverSeatVentLevel
         )
 
-        // 4. Ventilação Passageiro
+        // 4. Ventilação Passageiro (somente leitura — ajuste sempre manual)
         VentInfoCard(
             modifier    = Modifier.weight(1f),
             label       = "VENTILAÇÃO PASSAGEIRO",
-            level       = state.passengerSeatVentLevel,
-            autoEnabled = seatVentAutoEnabled,
-            onToggle    = onToggleSeatVent
+            level       = state.passengerSeatVentLevel
         )
     }
 }
@@ -1176,14 +1149,12 @@ private fun HmiInfoCardBox(
 private fun VentInfoCard(
     modifier: Modifier = Modifier,
     label: String,
-    level: String,
-    autoEnabled: Boolean,
-    onToggle: () -> Unit
+    level: String
 ) {
-    val levelInt = if (autoEnabled) (level.toIntOrNull() ?: 0) else 0
+    val levelInt = level.toIntOrNull() ?: 0
 
     HmiInfoCardBox(
-        modifier = modifier.clickable(onClick = onToggle)
+        modifier = modifier
     ) {
         Row(
             modifier              = Modifier.fillMaxSize(),
@@ -1229,27 +1200,27 @@ private fun VentInfoCard(
                             modifier = Modifier
                                 .size(6.dp)
                                 .background(
-                                    if (autoEnabled) HmiAccent else HmiFgFaint,
+                                    if (levelInt > 0) HmiAccent else HmiFgFaint,
                                     CircleShape
                                 )
                         )
                         Text(
-                            if (autoEnabled) "AUTO" else "OFF",
+                            "MANUAL",
                             fontSize      = 12.sp,
                             fontWeight    = FontWeight.SemiBold,
                             fontFamily    = FontFamily.Monospace,
-                            color         = if (autoEnabled) HmiAccent else HmiFgDim,
+                            color         = HmiFgDim,
                             letterSpacing = 1.sp
                         )
                     }
                 }
                 Text(
-                    if (autoEnabled) when (level) {
+                    when (level) {
                         "0" -> "Off"; "1" -> "Nível 1"; "2" -> "Nível 2"; "3" -> "Nível 3"; else -> "--"
-                    } else "--",
+                    },
                     fontSize      = 20.sp,
                     fontWeight    = FontWeight.Medium,
-                    color         = if (autoEnabled) HmiFg else HmiFgFaint,
+                    color         = if (levelInt > 0) HmiFg else HmiFgFaint,
                     letterSpacing = (-0.3).sp
                 )
                 Row(
@@ -1262,12 +1233,12 @@ private fun VentInfoCard(
                                 .weight(1f)
                                 .height(5.dp)
                                 .background(
-                                    if (autoEnabled && i <= levelInt) HmiFg else HmiSurface2,
+                                    if (i <= levelInt) HmiFg else HmiSurface2,
                                     RoundedCornerShape(1.dp)
                                 )
                                 .border(
                                     0.5.dp,
-                                    if (autoEnabled && i <= levelInt) HmiFgMuted else HmiBorder,
+                                    if (i <= levelInt) HmiFgMuted else HmiBorder,
                                     RoundedCornerShape(1.dp)
                                 )
                         )
