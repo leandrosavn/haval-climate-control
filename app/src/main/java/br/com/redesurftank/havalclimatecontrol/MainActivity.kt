@@ -50,7 +50,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.text.SimpleDateFormat
 import java.io.File
@@ -59,13 +58,35 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 private const val TAG = "MainActivity"
-private const val GITHUB_RELEASES_API =
-    "https://api.github.com/repos/rocamoras/haval-climate-control/releases/latest"
+private const val GITHUB_REPO              = "leandrosavn/haval-climate-control"
 private const val UI_PREFS                 = "climate_ui_prefs"
 private const val KEY_AUTO_CONTROL         = "auto_control_enabled"
 private const val KEY_LAST_UPDATE_CHECK    = "last_update_check_ms"
 private const val KEY_COMFORT_MODE         = "comfort_mode"
 private const val UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L
+
+/**
+ * Descobre a release mais recente SEM usar api.github.com (a central não alcança esse host).
+ * Lê o feed `releases.atom` de github.com p/ achar a tag mais nova e monta a URL do APK
+ * deterministicamente (o CI publica sempre o asset como `app-release.apk`). Mesmo padrão do Haval Radio.
+ * @return Pair(tag, apkUrl) — ex.: "v1.10.7" → ".../releases/download/v1.10.7/app-release.apk".
+ */
+private fun fetchLatestRelease(): Pair<String, String> {
+    val conn = (URL("https://github.com/$GITHUB_REPO/releases.atom")
+        .openConnection() as HttpURLConnection).apply {
+        requestMethod = "GET"
+        setRequestProperty("Accept", "application/atom+xml, */*")
+        setRequestProperty("User-Agent", "haval-climate-control")
+        connectTimeout = 10_000; readTimeout = 15_000
+    }
+    val atom = try {
+        conn.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
+    } finally { conn.disconnect() }
+    val tag = Regex("/releases/tag/(v[^\"/<]+)").find(atom)?.groupValues?.get(1)
+        ?: throw IllegalStateException("nenhuma release encontrada no feed")
+    val apkUrl = "https://github.com/$GITHUB_REPO/releases/download/$tag/app-release.apk"
+    return tag to apkUrl
+}
 
 // ─────────────────────────────────────────────────────────────
 // HMI color tokens — monochromatic dark, accent only for active
@@ -172,29 +193,13 @@ fun MainControlScreen(
         if (System.currentTimeMillis() - lastCheck >= UPDATE_CHECK_INTERVAL_MS) {
             withContext(Dispatchers.IO) {
                 try {
-                    val conn = URL(GITHUB_RELEASES_API).openConnection() as HttpURLConnection
-                    conn.requestMethod = "GET"
-                    conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
-                    conn.connectTimeout = 10_000
-                    conn.readTimeout    = 10_000
-                    if (conn.responseCode == 200) {
-                        val json   = JSONObject(conn.inputStream.bufferedReader().readText())
-                        val tag    = json.getString("tag_name")
-                        val assets = json.getJSONArray("assets")
-                        var dlUrl: String? = null
-                        for (i in 0 until assets.length()) {
-                            val a = assets.getJSONObject(i)
-                            if (a.getString("name").endsWith(".apk")) {
-                                dlUrl = a.getString("browser_download_url"); break
-                            }
-                        }
-                        withContext(Dispatchers.Main) {
-                            prefs.edit().putLong(KEY_LAST_UPDATE_CHECK, System.currentTimeMillis()).apply()
-                            if (dlUrl != null && compareVersions(tag, currentVersion) > 0) {
-                                latestVersion   = tag
-                                downloadUrl     = dlUrl
-                                updateAvailable = true
-                            }
+                    val (tag, dlUrl) = fetchLatestRelease()
+                    withContext(Dispatchers.Main) {
+                        prefs.edit().putLong(KEY_LAST_UPDATE_CHECK, System.currentTimeMillis()).apply()
+                        if (compareVersions(tag, currentVersion) > 0) {
+                            latestVersion   = tag
+                            downloadUrl     = dlUrl
+                            updateAvailable = true
                         }
                     }
                 } catch (e: Exception) {
@@ -1328,23 +1333,10 @@ fun DebugScreen(onNavigateBack: () -> Unit) {
         isChecking = true
         scope.launch(Dispatchers.IO) {
             try {
-                val conn = URL(GITHUB_RELEASES_API).openConnection() as HttpURLConnection
-                conn.requestMethod = "GET"
-                conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
-                if (conn.responseCode != 200) throw Exception("HTTP ${conn.responseCode}")
-                val json   = JSONObject(conn.inputStream.bufferedReader().readText())
-                val tag    = json.getString("tag_name")
-                val assets = json.getJSONArray("assets")
-                var dlUrl: String? = null
-                for (i in 0 until assets.length()) {
-                    val a = assets.getJSONObject(i)
-                    if (a.getString("name").endsWith(".apk")) {
-                        dlUrl = a.getString("browser_download_url"); break
-                    }
-                }
+                val (tag, dlUrl) = fetchLatestRelease()
                 withContext(Dispatchers.Main) {
                     isChecking = false
-                    if (dlUrl != null && compareVersions(tag, currentVersion) > 0) {
+                    if (compareVersions(tag, currentVersion) > 0) {
                         latestVersion = tag; downloadUrl = dlUrl; updateAvailable = true
                     } else {
                         updateMessage = "Você já está na versão mais recente ($currentVersion)"
