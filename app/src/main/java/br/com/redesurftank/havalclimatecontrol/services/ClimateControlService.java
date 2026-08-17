@@ -409,6 +409,12 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
                 insideTempWasOffline = false;
                 carStartTimestamp    = System.currentTimeMillis();
                 acControlArmed       = false;
+                // Na partida, o firmware do HVAC reseta a comfort_curve para o padrão dele.
+                // Zeramos o rastreamento de mudança externa para NÃO interpretar esse reset
+                // como alteração manual do usuário (o que sobrescreveria o modo salvo);
+                // o app re-aplica a config salva na próxima avaliação. (Fix do upstream
+                // 41461c1, adaptado: aqui só rastreamos a curva — ventilação é manual.)
+                lastSentComfortCurve = null;
                 Log.w(TAG, "Partida detectada — controle desarmado");
             }
 
