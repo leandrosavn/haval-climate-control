@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -47,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import br.com.redesurftank.havalclimatecontrol.services.ClimateControlService
 import br.com.redesurftank.havalclimatecontrol.ui.theme.HavalClimateControlTheme
+import br.com.redesurftank.havalclimatecontrol.utils.PersistentLog
 import br.com.redesurftank.havalclimatecontrol.utils.ShizukuUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -1312,6 +1314,10 @@ fun DebugScreen(onNavigateBack: () -> Unit) {
     }
     var shizukuUp       by remember { mutableStateOf(ShizukuUtils.isAvailable()) }
     var showShizukuHelp by remember { mutableStateOf(false) }
+    // O log persistente mora no storage device-protected, fora do alcance sem root/adb —
+    // sem este visualizador ele não serviria para nada na central.
+    var diagLogText     by remember { mutableStateOf("") }
+    var showDiagLog     by remember { mutableStateOf(false) }
     // Acima de 10999 o firewall por uid do Android barra a conexão no telnet:23, que é o único
     // caminho para subir o servidor. Sem uid baixo a flag não tem como funcionar.
     val selfUid = remember { runCatching { context.applicationInfo.uid }.getOrDefault(-1) }
@@ -1565,7 +1571,27 @@ fun DebugScreen(onNavigateBack: () -> Unit) {
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
+
+        Row(
+            modifier              = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment     = Alignment.CenterVertically
+        ) {
+            Text("Log de diagnóstico", fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                 color = Color(0xFFAAAAAA), modifier = Modifier.weight(1f))
+            TextButton(onClick = {
+                diagLogText = PersistentLog.dump(PersistentLog.DUMP_MAX_CHARS)
+                    .ifBlank { "(log vazio)" }
+                showDiagLog = true
+            }) { Text("Ver", fontSize = 15.sp, color = Color(0xFF4FC3F7)) }
+            TextButton(onClick = {
+                PersistentLog.clear()
+                diagLogText = ""
+            }) { Text("Limpar", fontSize = 15.sp, color = HmiFgMuted) }
+        }
+
+        Spacer(Modifier.height(4.dp))
 
         Text("Histórico de Ações", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFAAAAAA))
         Spacer(Modifier.height(6.dp))
@@ -1601,6 +1627,30 @@ fun DebugScreen(onNavigateBack: () -> Unit) {
         }
     }
 
+    if (showDiagLog) {
+        AlertDialog(
+            onDismissRequest  = { showDiagLog = false },
+            title             = { Text("Log de diagnóstico") },
+            text              = {
+                // O mais novo interessa mais: o dump vem do mais antigo para o mais recente,
+                // então a caixa já abre rolada até o fim.
+                val scroll = rememberScrollState()
+                LaunchedEffect(diagLogText) { scroll.scrollTo(scroll.maxValue) }
+                Text(
+                    diagLogText,
+                    fontSize   = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color      = Color(0xFFCCCCCC),
+                    modifier   = Modifier.fillMaxWidth().heightIn(max = 380.dp)
+                                         .verticalScroll(scroll)
+                )
+            },
+            confirmButton     = { TextButton(onClick = { showDiagLog = false }) { Text("Fechar") } },
+            containerColor    = Color(0xFF1E1E1E),
+            titleContentColor = HmiFg,
+            textContentColor  = HmiFgMuted
+        )
+    }
     if (showShizukuHelp) {
         AlertDialog(
             onDismissRequest  = { showShizukuHelp = false },

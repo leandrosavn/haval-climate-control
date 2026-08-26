@@ -40,6 +40,7 @@ import br.com.redesurftank.havalclimatecontrol.App;
 import br.com.redesurftank.havalclimatecontrol.ClimateStateHolder;
 import br.com.redesurftank.havalclimatecontrol.broadcastReceivers.RestartReceiver;
 import br.com.redesurftank.havalclimatecontrol.utils.IPTablesUtils;
+import br.com.redesurftank.havalclimatecontrol.utils.PersistentLog;
 import br.com.redesurftank.havalclimatecontrol.utils.ShizukuUtils;
 import br.com.redesurftank.havalclimatecontrol.utils.TelnetClientWrapper;
 import rikka.shizuku.Shizuku;
@@ -214,6 +215,8 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
         ContextCompat.registerReceiver(this, vehicleInitReceiver,
                 new IntentFilter("com.beantechs.intelligentvehiclecontrol.INIT_COMPLETED"),
                 ContextCompat.RECEIVER_NOT_EXPORTED);
+
+        PersistentLog.w(TAG, "servico criado");
     }
 
     @Override
@@ -225,7 +228,8 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
 
         try {
             isServiceRunning = true;
-            Log.w(TAG, "Service started");
+            PersistentLog.w(TAG, "servico iniciado (flags=" + flags + " startId=" + startId
+                    + " intent=" + (intent == null ? "null (recriado pelo sistema)" : "ok") + ")");
 
             Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                     .setContentTitle("Controle Climático Haval")
@@ -248,9 +252,10 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
                 selfUid = getApplicationContext().getPackageManager()
                         .getApplicationInfo(getApplicationContext().getPackageName(), 0).uid;
             } catch (Exception e) {
-                Log.e(TAG, "Failed to get application info: " + e.getMessage(), e);
+                PersistentLog.e(TAG, "falha lendo o ApplicationInfo: " + e);
             }
-            Log.w(TAG, "uid=" + selfUid + " start_shizuku_server=" + needsBootstrap + " → caminho: "
+            PersistentLog.w(TAG, "uid=" + selfUid + " start_shizuku_server=" + needsBootstrap
+                    + " → caminho: "
                     + (needsBootstrap ? "bootstrap do Shizuku por telnet"
                                       : "esperar o binder existente (subido pelo app-tool)"));
             // O firewall por uid do Android barra o loopback:23 para uid alto, e a regra que
@@ -258,8 +263,8 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
             // circular. Sem uid baixo o bootstrap não tem como dar certo; avisa no log em vez
             // de deixar o backoff girando calado.
             if (needsBootstrap && selfUid > 10999) {
-                Log.e(TAG, "start_shizuku_server=true mas uid=" + selfUid + " (>10999): o telnet:23"
-                        + " está barrado pelo firewall e o bootstrap deve falhar");
+                PersistentLog.e(TAG, "start_shizuku_server=true mas uid=" + selfUid + " (>10999): o"
+                        + " telnet:23 está barrado pelo firewall e o bootstrap deve falhar");
             }
 
             // Holder e não String final porque o caminho pode ser invalidado no meio das
@@ -295,8 +300,8 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
                             // existente (ver o regex "killed ..." abaixo), e se esse for o do
                             // Impulse a gente derruba o app dele de graça.
                             if (ShizukuUtils.isAvailable()) {
-                                Log.w(TAG, "server do Shizuku de terceiro já ativo — anexando ao"
-                                        + " binder existente em vez de subir o nosso");
+                                PersistentLog.w(TAG, "server do Shizuku de terceiro já ativo —"
+                                        + " anexando ao binder existente em vez de subir o nosso");
                                 binderWaitStartedMs = SystemClock.elapsedRealtime();
                                 Shizuku.addBinderReceivedListenerSticky(binderReceivedListener);
                                 backgroundHandler.postDelayed(timeoutRunnable,
@@ -309,7 +314,7 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
                             String filePath = cachedLibLocation[0];
                             if (!filePath.isEmpty()
                                     && !telnetClient.executeCommand("ls " + filePath).contains(filePath)) {
-                                Log.w(TAG, "libshizuku.so cacheado sumiu (" + filePath
+                                PersistentLog.w(TAG, "libshizuku.so cacheado sumiu (" + filePath
                                         + ") — app-tool desinstalado? refazendo o find");
                                 prefs.edit().remove(KEY_SHIZUKU_LIB).apply();
                                 cachedLibLocation[0] = "";
@@ -330,6 +335,8 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
                             }
                             telnetClient.disconnect();
 
+                            PersistentLog.w(TAG, "bootstrap do Shizuku OK na tentativa "
+                                    + (bootstrapAttempt[0] + 1));
                             bootstrapAttempt[0] = 0;
                             binderWaitStartedMs = SystemClock.elapsedRealtime();
                             Shizuku.addBinderReceivedListenerSticky(binderReceivedListener);
@@ -338,7 +345,10 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
                             // Backoff exponencial (1s→2s→…→30s) para não martelar o Telnet em falha persistente.
                             long backoff = Math.min(BOOTSTRAP_BACKOFF_MAX_MS,
                                     1000L << Math.min(bootstrapAttempt[0]++, 5));
-                            Log.e(TAG, "Error bootstrapping Shizuku (retry em " + backoff + "ms): " + e.getMessage(), e);
+                            // No log persistente: só o caminho feliz era instrumentado, então um
+                            // bootstrap que falhava em série virava silêncio absoluto no arquivo.
+                            PersistentLog.e(TAG, "bootstrap do Shizuku falhou (tentativa "
+                                    + bootstrapAttempt[0] + ", retry em " + backoff + "ms): " + e);
                             backgroundHandler.postDelayed(this, backoff);
                         }
                     }
@@ -358,7 +368,7 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
     private synchronized void onShizukuBinderReceived() {
         if (!isServiceRunning) return;
         Shizuku.removeBinderReceivedListener(binderReceivedListener);
-        Log.w(TAG, "Shizuku binder received após " + waitedForBinderMs() + "ms");
+        PersistentLog.w(TAG, "binder do Shizuku recebido após " + waitedForBinderMs() + "ms");
         isShizukuInitialized = true;
         backgroundHandler.removeCallbacksAndMessages(null);
         checkAndInitialize();
@@ -410,10 +420,10 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
         if (requestCode != 0) return;
         Shizuku.removeRequestPermissionResultListener(permissionResultListener);
         if (grantResult == PackageManager.PERMISSION_GRANTED) {
-            Log.w(TAG, "permissão do Shizuku concedida");
+            PersistentLog.w(TAG, "permissão do Shizuku concedida");
             checkAndInitialize();
         } else {
-            Log.e(TAG, "permissão do Shizuku negada");
+            PersistentLog.e(TAG, "permissão do Shizuku negada");
         }
     }
 
@@ -768,7 +778,7 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
             ClimateStateHolder.INSTANCE.updateVehicleData(false, null, null, null, null, null);
             ClimateStateHolder.INSTANCE.commandCallback = null;
         });
-        Log.w(TAG, "Service destroyed");
+        PersistentLog.w(TAG, "servico destruido");
         super.onDestroy();
     }
 
@@ -788,7 +798,7 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
         Shizuku.removeBinderDeadListener(this);
         mainHandler.post(() -> ClimateStateHolder.INSTANCE.updateVehicleData(
                 false, null, null, null, null, null));
-        Log.w(TAG, "REINÍCIO agendado (+1s) — motivo: " + reason);
+        PersistentLog.w(TAG, "REINÍCIO agendado (+1s) — motivo: " + reason);
         Intent broadcastIntent = new Intent(this, RestartReceiver.class);
         PendingIntent pendingIntent = PendingIntent.getBroadcast(
                 this, 0, broadcastIntent,
