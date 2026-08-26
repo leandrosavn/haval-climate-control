@@ -40,6 +40,7 @@ import br.com.redesurftank.havalclimatecontrol.App;
 import br.com.redesurftank.havalclimatecontrol.ClimateStateHolder;
 import br.com.redesurftank.havalclimatecontrol.broadcastReceivers.RestartReceiver;
 import br.com.redesurftank.havalclimatecontrol.utils.IPTablesUtils;
+import br.com.redesurftank.havalclimatecontrol.utils.PersistentLog;
 import br.com.redesurftank.havalclimatecontrol.utils.ShizukuUtils;
 import br.com.redesurftank.havalclimatecontrol.utils.TelnetClientWrapper;
 import rikka.shizuku.Shizuku;
@@ -55,12 +56,27 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
     private static final String PREFS_NAME          = "climate_control_prefs";
     private static final String KEY_SHIZUKU_LIB     = "shizuku_lib_location";
     private static final String KEY_INSTALLED_CHECK = "self_installation_integrity_check";
+    // Autoriza este app a SUBIR o shizuku_server por telnet. Default false: nesta central
+    // quem sobe o server é o Impulse — e o server é singleton, quem sobe depois mata quem
+    // estava lá. Subir por conta própria derrubaria o do Impulse, e se ele reagisse subindo
+    // o dele de novo os dois ficariam se matando em loop. Fica em climate_control_prefs
+    // (device-protected) de propósito: onStartCommand roda no LOCKED_BOOT_COMPLETED, antes
+    // do unlock, e um store credential-protected leria false em todo boot frio.
+    private static final String KEY_START_SHIZUKU   = "start_shizuku_server";
 
     private static final String HVAC_PACKAGE_NAME   = "com.beantechs.hvac";
     private static final long   HVAC_RESUME_DELAY_MS = 300;
     private static final long   EVAL_DEBOUNCE_MS     = 50;     // coalesce bursts de onDataChanged numa única avaliação
     private static final long   IPTABLES_REFRESH_MS  = 60_000; // re-assert da regra iptables (idempotente, antes 15s)
     private static final long   BOOTSTRAP_BACKOFF_MAX_MS = 30_000;
+    // Medido em campo pelo upstream (log de 23/08): em boot frio o binder do Shizuku leva
+    // 4,3s e 6,3s para chegar. O timeout antigo de 10s deixava 37% de margem — um boot mais
+    // lento caía em restart(), que no caminho "esperar o binder existente" só recomeça a
+    // mesma espera. Esperar mais é de graça: assim que o binder chega seguimos na hora.
+    private static final long   SHIZUKU_BINDER_TIMEOUT_MS    = 30_000;
+    // No caminho de bootstrap por telnet o restart TEM efeito (refaz o bootstrap), então
+    // aqui a espera fica curta de propósito — mas não tão curta quanto 5s.
+    private static final long   SHIZUKU_BOOTSTRAP_TIMEOUT_MS = 15_000;
 
     private static final String PROP_AUTO_ENABLE = "car.hvac.auto_enable";
     private static final String PROP_INSIDE_TEMP = "car.basic.inside_temp";
@@ -128,7 +144,22 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     private boolean isShizukuInitialized = false;
+    /** Espelha KEY_START_SHIZUKU no ciclo atual, só para a mensagem de timeout. */
+    private boolean bootstrapAllowed     = false;
     private boolean isServiceRunning     = false;
+    /** elapsedRealtime de quando começamos a esperar o binder — vira métrica no log. */
+    private volatile long binderWaitStartedMs = 0;
+
+    // Listeners guardados em campos: `this::metodo` cria uma instância de lambda NOVA a cada
+    // avaliação, então removeXListener(this::metodo) nunca removia o que havia sido
+    // registrado — os listeners acumulavam a cada ciclo de restart.
+    private final Shizuku.OnBinderReceivedListener binderReceivedListener =
+            this::onShizukuBinderReceived;
+    private final Shizuku.OnRequestPermissionResultListener permissionResultListener =
+            this::onShizukuPermissionResult;
+
+    /** Registrado uma vez em onCreate, desregistrado em onDestroy. */
+    private BroadcastReceiver vehicleInitReceiver;
 
     private IIntelligentVehicleControlService controlService;
     private final Map<String, String> dataCache = new HashMap<>();
@@ -168,6 +199,24 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
         handlerThread = new HandlerThread("ClimateControlThread");
         handlerThread.start();
         backgroundHandler = new Handler(handlerThread.getLooper());
+
+        // UMA vez por instância, no contexto do serviço. Antes isso ficava dentro de
+        // checkAndInitialize() e no contexto da Application: cada init acumulava um receiver
+        // que sobrevivia ao onDestroy, e no INIT_COMPLETED seguinte todos disparavam juntos —
+        // inclusive os de instâncias mortas, cada um pedindo restart. Era a explicação mais
+        // provável dos reinícios "do nada".
+        vehicleInitReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (!isServiceRunning) return;   // instância encerrada: quem sobe de novo é o alarme
+                restart("intelligentvehiclecontrol reinicializou (INIT_COMPLETED)");
+            }
+        };
+        ContextCompat.registerReceiver(this, vehicleInitReceiver,
+                new IntentFilter("com.beantechs.intelligentvehiclecontrol.INIT_COMPLETED"),
+                ContextCompat.RECEIVER_NOT_EXPORTED);
+
+        PersistentLog.w(TAG, "servico criado");
     }
 
     @Override
@@ -179,7 +228,8 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
 
         try {
             isServiceRunning = true;
-            Log.w(TAG, "Service started");
+            PersistentLog.w(TAG, "servico iniciado (flags=" + flags + " startId=" + startId
+                    + " intent=" + (intent == null ? "null (recriado pelo sistema)" : "ok") + ")");
 
             Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                     .setContentTitle("Controle Climático Haval")
@@ -191,45 +241,90 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
             SharedPreferences prefs = App.getDeviceProtectedContext()
                     .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
 
-            boolean needsBootstrap = true;
+            // Quem decide se subimos o server é a pref, não mais o uid: um app de usuário numa
+            // central sem o Impulse ficava esperando para sempre um binder que ninguém ia subir.
+            // O uid continua no log porque ainda explica a permissão que temos para falar com o
+            // telnet.
+            boolean needsBootstrap = prefs.getBoolean(KEY_START_SHIZUKU, false);
+            bootstrapAllowed = needsBootstrap;
+            int selfUid = -1;
             try {
-                var selfInfo = getApplicationContext().getPackageManager()
-                        .getApplicationInfo(getApplicationContext().getPackageName(), 0);
-                if (selfInfo.uid > 10999) {
-                    // Regular user app — Shizuku is started by app-tool; just wait for the binder
-                    Log.w(TAG, "UID > 10999, skipping Shizuku bootstrap, waiting for existing binder...");
-                    needsBootstrap = false;
-                }
+                selfUid = getApplicationContext().getPackageManager()
+                        .getApplicationInfo(getApplicationContext().getPackageName(), 0).uid;
             } catch (Exception e) {
-                Log.e(TAG, "Failed to get application info: " + e.getMessage(), e);
+                PersistentLog.e(TAG, "falha lendo o ApplicationInfo: " + e);
+            }
+            PersistentLog.w(TAG, "uid=" + selfUid + " start_shizuku_server=" + needsBootstrap
+                    + " → caminho: "
+                    + (needsBootstrap ? "bootstrap do Shizuku por telnet"
+                                      : "esperar o binder existente (subido pelo app-tool)"));
+            // O firewall por uid do Android barra o loopback:23 para uid alto, e a regra que
+            // libera (IPTablesUtils) só entra depois que o Shizuku está de pé — ou seja,
+            // circular. Sem uid baixo o bootstrap não tem como dar certo; avisa no log em vez
+            // de deixar o backoff girando calado.
+            if (needsBootstrap && selfUid > 10999) {
+                PersistentLog.e(TAG, "start_shizuku_server=true mas uid=" + selfUid + " (>10999): o"
+                        + " telnet:23 está barrado pelo firewall e o bootstrap deve falhar");
             }
 
-            final String cachedLibLocation = prefs.getString(KEY_SHIZUKU_LIB, "");
+            // Holder e não String final porque o caminho pode ser invalidado no meio das
+            // tentativas: se o libshizuku.so morava no APK do app-tool e ele foi desinstalado,
+            // o cache aponta para um arquivo que não existe mais.
+            final String[] cachedLibLocation = { prefs.getString(KEY_SHIZUKU_LIB, "") };
 
             final Runnable timeoutRunnable = () -> {
                 if (!isShizukuInitialized) {
-                    Log.w(TAG, "Timeout waiting for Shizuku binder, restarting...");
-                    restart();
+                    // Sem essa dica uma central sem Impulse fica num loop de 30s sem dizer o que
+                    // fazer.
+                    String hint = bootstrapAllowed ? ""
+                            : " — ninguém subiu o server e \"Subir servidor do Shizuku\" está"
+                              + " desligado no Debug; ligue essa opção nesta central";
+                    restart("timeout esperando o binder do Shizuku após "
+                            + waitedForBinderMs() + "ms" + hint);
                 }
             };
 
             if (!needsBootstrap) {
                 // Shizuku already running (started by app-tool); just attach to the existing binder
-                Shizuku.addBinderReceivedListenerSticky(this::onShizukuBinderReceived);
-                backgroundHandler.postDelayed(timeoutRunnable, 10000);
+                binderWaitStartedMs = SystemClock.elapsedRealtime();
+                Shizuku.addBinderReceivedListenerSticky(binderReceivedListener);
+                backgroundHandler.postDelayed(timeoutRunnable, SHIZUKU_BINDER_TIMEOUT_MS);
             } else {
                 final int[] bootstrapAttempt = {0};
                 backgroundHandler.post(new Runnable() {
                     @Override
                     public void run() {
                         try {
+                            // Guard: a pref autoriza subir o server, mas não autoriza matar um que
+                            // já esteja de pé. Rodar o libshizuku.so mata o shizuku_server
+                            // existente (ver o regex "killed ..." abaixo), e se esse for o do
+                            // Impulse a gente derruba o app dele de graça.
+                            if (ShizukuUtils.isAvailable()) {
+                                PersistentLog.w(TAG, "server do Shizuku de terceiro já ativo —"
+                                        + " anexando ao binder existente em vez de subir o nosso");
+                                binderWaitStartedMs = SystemClock.elapsedRealtime();
+                                Shizuku.addBinderReceivedListenerSticky(binderReceivedListener);
+                                backgroundHandler.postDelayed(timeoutRunnable,
+                                        SHIZUKU_BINDER_TIMEOUT_MS);
+                                return;
+                            }
+
                             TelnetClientWrapper telnetClient = new TelnetClientWrapper();
                             telnetClient.connect("127.0.0.1", 23);
-                            String filePath = cachedLibLocation;
+                            String filePath = cachedLibLocation[0];
+                            if (!filePath.isEmpty()
+                                    && !telnetClient.executeCommand("ls " + filePath).contains(filePath)) {
+                                PersistentLog.w(TAG, "libshizuku.so cacheado sumiu (" + filePath
+                                        + ") — app-tool desinstalado? refazendo o find");
+                                prefs.edit().remove(KEY_SHIZUKU_LIB).apply();
+                                cachedLibLocation[0] = "";
+                                filePath = "";
+                            }
                             if (filePath.isEmpty()) {
                                 filePath = telnetClient.executeCommand("find /data/app -name libshizuku.so");
                                 if (filePath.isEmpty()) throw new RuntimeException("libshizuku.so not found");
                                 prefs.edit().putString(KEY_SHIZUKU_LIB, filePath).apply();
+                                cachedLibLocation[0] = filePath;
                                 Log.w(TAG, "libshizuku.so found at: " + filePath);
                             }
 
@@ -240,14 +335,20 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
                             }
                             telnetClient.disconnect();
 
+                            PersistentLog.w(TAG, "bootstrap do Shizuku OK na tentativa "
+                                    + (bootstrapAttempt[0] + 1));
                             bootstrapAttempt[0] = 0;
-                            Shizuku.addBinderReceivedListenerSticky(ClimateControlService.this::onShizukuBinderReceived);
-                            backgroundHandler.postDelayed(timeoutRunnable, 5000);
+                            binderWaitStartedMs = SystemClock.elapsedRealtime();
+                            Shizuku.addBinderReceivedListenerSticky(binderReceivedListener);
+                            backgroundHandler.postDelayed(timeoutRunnable, SHIZUKU_BOOTSTRAP_TIMEOUT_MS);
                         } catch (Exception e) {
                             // Backoff exponencial (1s→2s→…→30s) para não martelar o Telnet em falha persistente.
                             long backoff = Math.min(BOOTSTRAP_BACKOFF_MAX_MS,
                                     1000L << Math.min(bootstrapAttempt[0]++, 5));
-                            Log.e(TAG, "Error bootstrapping Shizuku (retry em " + backoff + "ms): " + e.getMessage(), e);
+                            // No log persistente: só o caminho feliz era instrumentado, então um
+                            // bootstrap que falhava em série virava silêncio absoluto no arquivo.
+                            PersistentLog.e(TAG, "bootstrap do Shizuku falhou (tentativa "
+                                    + bootstrapAttempt[0] + ", retry em " + backoff + "ms): " + e);
                             backgroundHandler.postDelayed(this, backoff);
                         }
                     }
@@ -266,11 +367,17 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
 
     private synchronized void onShizukuBinderReceived() {
         if (!isServiceRunning) return;
-        Shizuku.removeBinderReceivedListener(this::onShizukuBinderReceived);
-        Log.w(TAG, "Shizuku binder received");
+        Shizuku.removeBinderReceivedListener(binderReceivedListener);
+        PersistentLog.w(TAG, "binder do Shizuku recebido após " + waitedForBinderMs() + "ms");
         isShizukuInitialized = true;
         backgroundHandler.removeCallbacksAndMessages(null);
         checkAndInitialize();
+    }
+
+    /** Quanto tempo esperamos pelo binder, em ms; -1 se a espera nem começou. */
+    private long waitedForBinderMs() {
+        long started = binderWaitStartedMs;
+        return started == 0 ? -1 : SystemClock.elapsedRealtime() - started;
     }
 
     private void checkAndInitialize() {
@@ -278,13 +385,9 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
 
         if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
             Log.w(TAG, "Requesting Shizuku permission...");
-            Shizuku.addRequestPermissionResultListener((requestCode, grantResult) -> {
-                if (requestCode == 0 && grantResult == PackageManager.PERMISSION_GRANTED) {
-                    checkAndInitialize();
-                } else {
-                    Log.e(TAG, "Shizuku permission denied");
-                }
-            });
+            // Listener em campo e removido no callback: antes um lambda anônimo novo era
+            // adicionado a cada checkAndInitialize() e nunca saía.
+            Shizuku.addRequestPermissionResultListener(permissionResultListener);
             Shizuku.requestPermission(0);
             return;
         }
@@ -308,23 +411,20 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
         });
 
         if (!connectToVehicleService()) {
-            Log.e(TAG, "Failed to connect to vehicle service, restarting...");
-            restart();
+            restart("falha conectando ao serviço do veículo");
             return;
         }
+    }
 
-        IntentFilter filter = new IntentFilter("com.beantechs.intelligentvehiclecontrol.INIT_COMPLETED");
-        ContextCompat.registerReceiver(App.getContext(), new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                if (isServiceRunning) {
-                    Log.w(TAG, "intelligentvehiclecontrol restarted, restarting service...");
-                    restart();
-                } else {
-                    checkAndInitialize();
-                }
-            }
-        }, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
+    private synchronized void onShizukuPermissionResult(int requestCode, int grantResult) {
+        if (requestCode != 0) return;
+        Shizuku.removeRequestPermissionResultListener(permissionResultListener);
+        if (grantResult == PackageManager.PERMISSION_GRANTED) {
+            PersistentLog.w(TAG, "permissão do Shizuku concedida");
+            checkAndInitialize();
+        } else {
+            PersistentLog.e(TAG, "permissão do Shizuku negada");
+        }
     }
 
     private boolean connectToVehicleService() {
@@ -663,8 +763,13 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
     public void onDestroy() {
         if (handlerThread != null) handlerThread.quitSafely();
         isServiceRunning = false;
-        Shizuku.removeBinderReceivedListener(this::onShizukuBinderReceived);
+        Shizuku.removeBinderReceivedListener(binderReceivedListener);
+        Shizuku.removeRequestPermissionResultListener(permissionResultListener);
         Shizuku.removeBinderDeadListener(this);
+        if (vehicleInitReceiver != null) {
+            try { unregisterReceiver(vehicleInitReceiver); } catch (Exception ignored) {}
+            vehicleInitReceiver = null;
+        }
         try {
             if (controlService != null)
                 controlService.unRegisterDataChangedListener(getPackageName(), vehicleDataListener);
@@ -673,26 +778,27 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
             ClimateStateHolder.INSTANCE.updateVehicleData(false, null, null, null, null, null);
             ClimateStateHolder.INSTANCE.commandCallback = null;
         });
-        Log.w(TAG, "Service destroyed");
+        PersistentLog.w(TAG, "servico destruido");
         super.onDestroy();
     }
 
     @Override
     public void onBinderDead() {
-        Shizuku.removeBinderReceivedListener(this::onShizukuBinderReceived);
+        Shizuku.removeBinderReceivedListener(binderReceivedListener);
         Shizuku.removeBinderDeadListener(this);
-        Log.w(TAG, "Shizuku binder dead, restarting...");
-        restart();
+        restart("binder do Shizuku morreu");
     }
 
-    private synchronized void restart() {
+    /** @param reason vai para o log — é o que responde "por que reiniciou?". */
+    private synchronized void restart(String reason) {
         isShizukuInitialized = false;
         isServiceRunning     = false;
-        Shizuku.removeBinderReceivedListener(this::onShizukuBinderReceived);
+        Shizuku.removeBinderReceivedListener(binderReceivedListener);
+        Shizuku.removeRequestPermissionResultListener(permissionResultListener);
         Shizuku.removeBinderDeadListener(this);
         mainHandler.post(() -> ClimateStateHolder.INSTANCE.updateVehicleData(
                 false, null, null, null, null, null));
-        Log.w(TAG, "Scheduling service restart...");
+        PersistentLog.w(TAG, "REINÍCIO agendado (+1s) — motivo: " + reason);
         Intent broadcastIntent = new Intent(this, RestartReceiver.class);
         PendingIntent pendingIntent = PendingIntent.getBroadcast(
                 this, 0, broadcastIntent,

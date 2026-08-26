@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -45,7 +46,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
+import br.com.redesurftank.havalclimatecontrol.services.ClimateControlService
 import br.com.redesurftank.havalclimatecontrol.ui.theme.HavalClimateControlTheme
+import br.com.redesurftank.havalclimatecontrol.utils.PersistentLog
+import br.com.redesurftank.havalclimatecontrol.utils.ShizukuUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -64,6 +68,12 @@ private const val KEY_AUTO_CONTROL         = "auto_control_enabled"
 private const val KEY_LAST_UPDATE_CHECK    = "last_update_check_ms"
 private const val KEY_COMFORT_MODE         = "comfort_mode"
 private const val UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L
+
+// Prefs do serviço (device-protected). A flag do Shizuku mora aqui e não em UI_PREFS porque
+// o serviço a lê no LOCKED_BOOT_COMPLETED, antes do unlock — em credential storage ela leria
+// false em todo boot frio.
+private const val SERVICE_PREFS            = "climate_control_prefs"
+private const val KEY_START_SHIZUKU        = "start_shizuku_server"
 
 /**
  * Descobre a release mais recente SEM usar api.github.com (a central não alcança esse host).
@@ -1295,6 +1305,24 @@ fun DebugScreen(onNavigateBack: () -> Unit) {
     var showPermDialog   by remember { mutableStateOf(false) }
     var downloadJob      by remember { mutableStateOf<Job?>(null) }
 
+    // Device-protected: é o mesmo store que o serviço lê no boot travado.
+    val servicePrefs = remember {
+        App.getDeviceProtectedContext().getSharedPreferences(SERVICE_PREFS, Context.MODE_PRIVATE)
+    }
+    var startShizukuEnabled by remember {
+        mutableStateOf(servicePrefs.getBoolean(KEY_START_SHIZUKU, false))
+    }
+    var shizukuUp       by remember { mutableStateOf(ShizukuUtils.isAvailable()) }
+    var showShizukuHelp by remember { mutableStateOf(false) }
+    // O log persistente mora no storage device-protected, fora do alcance sem root/adb —
+    // sem este visualizador ele não serviria para nada na central.
+    var diagLogText     by remember { mutableStateOf("") }
+    var showDiagLog     by remember { mutableStateOf(false) }
+    // Acima de 10999 o firewall por uid do Android barra a conexão no telnet:23, que é o único
+    // caminho para subir o servidor. Sem uid baixo a flag não tem como funcionar.
+    val selfUid = remember { runCatching { context.applicationInfo.uid }.getOrDefault(-1) }
+    val canReachTelnet = selfUid in 0..10999
+
     val permLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { }
@@ -1478,6 +1506,93 @@ fun DebugScreen(onNavigateBack: () -> Unit) {
 
         Spacer(Modifier.height(10.dp))
 
+        Text("Shizuku", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFAAAAAA))
+        Spacer(Modifier.height(6.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors   = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
+            shape    = RoundedCornerShape(12.dp)
+        ) {
+            Row(
+                modifier              = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment     = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text("Subir servidor do Shizuku", fontSize = 16.sp,
+                             fontWeight = FontWeight.Medium, color = HmiFg)
+                        IconButton(onClick = { showShizukuHelp = true }, modifier = Modifier.size(24.dp)) {
+                            Icon(Icons.Default.Info, contentDescription = "Ajuda",
+                                 tint = HmiFgMuted, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                    Text(
+                        (if (shizukuUp) "ativo agora" else "indisponível agora") +
+                        " · uid " + (if (selfUid >= 0) selfUid.toString() else "?") +
+                        if (startShizukuEnabled && !canReachTelnet)
+                            " · ⚠ uid > 10999: telnet:23 barrado, o bootstrap vai falhar"
+                        else if (startShizukuEnabled)
+                            " · ⚠ só mantenha ligado em central sem Impulse"
+                        else "",
+                        fontSize = 13.sp,
+                        color    = when {
+                            startShizukuEnabled && !canReachTelnet -> Color(0xFFFF7043)
+                            startShizukuEnabled                    -> Color(0xFFFFB74D)
+                            shizukuUp                              -> Color(0xFF888888)
+                            else                                   -> Color(0xFFFF7043)
+                        }
+                    )
+                }
+                Switch(
+                    checked         = startShizukuEnabled,
+                    onCheckedChange = { enabled ->
+                        startShizukuEnabled = enabled
+                        servicePrefs.edit().putBoolean(KEY_START_SHIZUKU, enabled).apply()
+                        // A decisão é tomada no onStartCommand, então só vale no próximo ciclo:
+                        // para e sobe de novo para a pref valer agora.
+                        val svc = Intent(context, ClimateControlService::class.java)
+                        runCatching {
+                            context.stopService(svc)
+                            context.startForegroundService(svc)
+                        }
+                        shizukuUp = ShizukuUtils.isAvailable()
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor   = Color.White,
+                        checkedTrackColor   = Color(0xFF1565C0),
+                        uncheckedThumbColor = HmiFgMuted,
+                        uncheckedTrackColor = Color(0xFF2A2A2A)
+                    )
+                )
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        Row(
+            modifier              = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment     = Alignment.CenterVertically
+        ) {
+            Text("Log de diagnóstico", fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                 color = Color(0xFFAAAAAA), modifier = Modifier.weight(1f))
+            TextButton(onClick = {
+                diagLogText = PersistentLog.dump(PersistentLog.DUMP_MAX_CHARS)
+                    .ifBlank { "(log vazio)" }
+                showDiagLog = true
+            }) { Text("Ver", fontSize = 15.sp, color = Color(0xFF4FC3F7)) }
+            TextButton(onClick = {
+                PersistentLog.clear()
+                diagLogText = ""
+            }) { Text("Limpar", fontSize = 15.sp, color = HmiFgMuted) }
+        }
+
+        Spacer(Modifier.height(4.dp))
+
         Text("Histórico de Ações", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFAAAAAA))
         Spacer(Modifier.height(6.dp))
 
@@ -1512,6 +1627,48 @@ fun DebugScreen(onNavigateBack: () -> Unit) {
         }
     }
 
+    if (showDiagLog) {
+        AlertDialog(
+            onDismissRequest  = { showDiagLog = false },
+            title             = { Text("Log de diagnóstico") },
+            text              = {
+                // O mais novo interessa mais: o dump vem do mais antigo para o mais recente,
+                // então a caixa já abre rolada até o fim.
+                val scroll = rememberScrollState()
+                LaunchedEffect(diagLogText) { scroll.scrollTo(scroll.maxValue) }
+                Text(
+                    diagLogText,
+                    fontSize   = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color      = Color(0xFFCCCCCC),
+                    modifier   = Modifier.fillMaxWidth().heightIn(max = 380.dp)
+                                         .verticalScroll(scroll)
+                )
+            },
+            confirmButton     = { TextButton(onClick = { showDiagLog = false }) { Text("Fechar") } },
+            containerColor    = Color(0xFF1E1E1E),
+            titleContentColor = HmiFg,
+            textContentColor  = HmiFgMuted
+        )
+    }
+    if (showShizukuHelp) {
+        AlertDialog(
+            onDismissRequest  = { showShizukuHelp = false },
+            title             = { Text("Subir servidor do Shizuku") },
+            text              = { Text(
+                "Todo acesso ao veículo passa pelo Shizuku, e nesta central quem sobe esse " +
+                "servidor é o Impulse. Se ele não estiver instalado, ninguém sobe o servidor " +
+                "e este app fica sem funcionar.\n\n" +
+                "Ative esta opção só para o app subir o servidor por conta própria. Deixe " +
+                "desligada com o Impulse instalado: existe um único servidor por central, e " +
+                "quem sobe depois derruba o anterior."
+            ) },
+            confirmButton     = { TextButton(onClick = { showShizukuHelp = false }) { Text("OK") } },
+            containerColor    = Color(0xFF1E1E1E),
+            titleContentColor = HmiFg,
+            textContentColor  = HmiFgMuted
+        )
+    }
     if (showMsgDialog) {
         AlertDialog(
             onDismissRequest  = { showMsgDialog = false },
