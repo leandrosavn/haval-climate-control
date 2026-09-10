@@ -798,7 +798,15 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
         Shizuku.removeBinderDeadListener(this);
         mainHandler.post(() -> ClimateStateHolder.INSTANCE.updateVehicleData(
                 false, null, null, null, null, null));
-        PersistentLog.w(TAG, "REINÍCIO agendado (+1s) — motivo: " + reason);
+        // Consumo do shizuku_server no momento do reinício (instrumentação do OOM que o
+        // upstream viu em 1b7815e: cada newProcess() segura um holder no server até o
+        // proxy deste lado ser coletado; o que importa é a TAXA). Vai junto do motivo
+        // para a linha responder "por que reiniciou?" sem depender de outro log.
+        long upMs = android.os.SystemClock.elapsedRealtime();
+        long forks = ShizukuUtils.newProcessCount();
+        PersistentLog.w(TAG, "REINÍCIO agendado (+1s) — motivo: " + reason
+                + " | uptime=" + (upMs / 1000) + "s newProcess=" + forks
+                + String.format(java.util.Locale.US, " (%.1f/min)", upMs > 0 ? forks * 60000.0 / upMs : 0.0));
         Intent broadcastIntent = new Intent(this, RestartReceiver.class);
         PendingIntent pendingIntent = PendingIntent.getBroadcast(
                 this, 0, broadcastIntent,
