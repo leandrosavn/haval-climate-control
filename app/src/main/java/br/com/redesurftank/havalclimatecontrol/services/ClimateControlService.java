@@ -65,10 +65,19 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
     private static final String KEY_START_SHIZUKU   = "start_shizuku_server";
 
     private static final String HVAC_PACKAGE_NAME   = "com.beantechs.hvac";
-    private static final long   HVAC_RESUME_DELAY_MS = 300;
+    // Janela em que o HVAC do OEM fica desabilitado depois de uma escrita (porte do upstream
+    // 98bc464). Cada ciclo custa um `dumpsys activity`, um `pm disable-user`, um `am force-stop`,
+    // 150ms de sleep e depois um `pm enable` — e o `pm` reescreve estado e dispara PACKAGE_CHANGED
+    // para todo mundo; a barra de status do OEM responde tentando abrir o app desabilitado (stack
+    // traces no thread principal do SystemUI). Com a janela maior, escritas próximas (AC + curva
+    // de conforto + aquecimento na mesma avaliação) suspendem UMA vez e reabilitam no fim.
+    private static final long   HVAC_RESUME_DELAY_MS = 2_500;
     private static final long   EVAL_DEBOUNCE_MS     = 50;     // coalesce bursts de onDataChanged numa única avaliação
     private static final long   IPTABLES_REFRESH_MS  = 60_000; // re-assert da regra iptables (idempotente, antes 15s)
     private static final long   BOOTSTRAP_BACKOFF_MAX_MS = 30_000;
+    // Teto e passo da espera pelo binder depois que o starter mata um shizuku_server órfão.
+    private static final long   OLD_SERVER_KILLED_WAIT_MS = 5_000;
+    private static final long   OLD_SERVER_KILLED_POLL_MS = 100;
     // Medido em campo pelo upstream (log de 23/08): em boot frio o binder do Shizuku leva
     // 4,3s e 6,3s para chegar. O timeout antigo de 10s deixava 37% de margem — um boot mais
     // lento caía em restart(), que no caminho "esperar o binder existente" só recomeça a
@@ -329,11 +338,22 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
                             }
 
                             String result = telnetClient.executeCommand(filePath);
-                            if (Pattern.compile("killed \\d+ \\(shizuku_server\\)").matcher(result).find()) {
-                                Log.w(TAG, "Old Shizuku process killed, waiting 5s...");
-                                Thread.sleep(5000);
-                            }
                             telnetClient.disconnect();
+                            if (Pattern.compile("killed \\d+ \\(shizuku_server\\)").matcher(result).find()) {
+                                // O starter matou um shizuku_server antigo (acontece a cada soft
+                                // reboot do framework: o server sobrevive à morte do system_server,
+                                // mas fica órfão). Antes havia um Thread.sleep(5000) fixo aqui; no
+                                // log do upstream (1ea6201) o binder já estava pronto 1ms depois.
+                                // Espera o binder novo de verdade, no máximo o mesmo teto.
+                                long t0 = SystemClock.elapsedRealtime();
+                                while (!ShizukuUtils.isAvailable()
+                                        && SystemClock.elapsedRealtime() - t0 < OLD_SERVER_KILLED_WAIT_MS) {
+                                    Thread.sleep(OLD_SERVER_KILLED_POLL_MS);
+                                }
+                                PersistentLog.w(TAG, "shizuku_server antigo morto pelo starter — binder novo "
+                                        + (ShizukuUtils.isAvailable() ? "pronto" : "ainda não chegou")
+                                        + " após " + (SystemClock.elapsedRealtime() - t0) + "ms");
+                            }
 
                             PersistentLog.w(TAG, "bootstrap do Shizuku OK na tentativa "
                                     + (bootstrapAttempt[0] + 1));
@@ -798,7 +818,15 @@ public class ClimateControlService extends Service implements Shizuku.OnBinderDe
         Shizuku.removeBinderDeadListener(this);
         mainHandler.post(() -> ClimateStateHolder.INSTANCE.updateVehicleData(
                 false, null, null, null, null, null));
-        PersistentLog.w(TAG, "REINÍCIO agendado (+1s) — motivo: " + reason);
+        // Consumo do shizuku_server no momento do reinício (instrumentação do OOM que o
+        // upstream viu em 1b7815e: cada newProcess() segura um holder no server até o
+        // proxy deste lado ser coletado; o que importa é a TAXA). Vai junto do motivo
+        // para a linha responder "por que reiniciou?" sem depender de outro log.
+        long upMs = android.os.SystemClock.elapsedRealtime();
+        long forks = ShizukuUtils.newProcessCount();
+        PersistentLog.w(TAG, "REINÍCIO agendado (+1s) — motivo: " + reason
+                + " | uptime=" + (upMs / 1000) + "s newProcess=" + forks
+                + String.format(java.util.Locale.US, " (%.1f/min)", upMs > 0 ? forks * 60000.0 / upMs : 0.0));
         Intent broadcastIntent = new Intent(this, RestartReceiver.class);
         PendingIntent pendingIntent = PendingIntent.getBroadcast(
                 this, 0, broadcastIntent,
